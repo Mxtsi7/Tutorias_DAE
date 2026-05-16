@@ -145,11 +145,4 @@ Estudiante envía ficha
 - `AUSENCIA_DETECTADA` — 2 ausencias consecutivas
 - `TUTORIA_CERRADA` — coordinador aprueba cierre
 
----
 
-## 👥 Integrantes
-- Maximiliano Sáez
-- Christopher Solís
-
-**Profesor:** Gastón Contreras  
-**Ramo:** Desarrollo de Aplicaciones Empresariales
