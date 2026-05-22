@@ -1,5 +1,3 @@
--- tutores.lua: Datos ficticios de tutores para el PMN
-
 local tutores = {
     {
         id = 1,
@@ -29,5 +27,4 @@ local tutores = {
         incidentes_recientes = 0
     },
 }
-
 return tutores

@@ -1,32 +1,53 @@
--- ScreenManager.lua: Gestiona el cambio entre pantallas de la aplicación
-
 local ScreenManager = {}
-ScreenManager.current = nil
-ScreenManager.screens = {}
+ScreenManager.current     = nil
+ScreenManager.currentName = ""
 
-function ScreenManager.load(nombre)
-    -- TODO: cargar la pantalla correspondiente al nombre
-    -- Ejemplo: "menu" -> MenuScreen, "solicitud" -> SolicitudScreen
+local registry = {
+    login       = "src.screens.LoginScreen",
+    dashboard   = "src.screens.DashboardScreen",
+    solicitud   = "src.screens.SolicitudScreen",
+    asignacion  = "src.screens.AsignacionScreen",
+    sesion      = "src.screens.SesionScreen",
+    seguimiento = "src.screens.SeguimientoScreen",
+}
+
+function ScreenManager.load(name, params)
+    local path = registry[name]
+    if not path then return end
+    local Screen = require(path)
+    ScreenManager.current     = Screen
+    ScreenManager.currentName = name
+    if Screen.load then Screen.load(params) end
 end
 
 function ScreenManager.update(dt)
-    -- TODO: llamar current:update(dt) si existe
+    if ScreenManager.current and ScreenManager.current.update then
+        ScreenManager.current.update(dt)
+    end
 end
 
 function ScreenManager.draw()
-    -- TODO: llamar current:draw() si existe
+    if ScreenManager.current and ScreenManager.current.draw then
+        ScreenManager.current.draw()
+    end
 end
 
 function ScreenManager.keypressed(key)
-    -- TODO: delegar keypressed a la pantalla actual
+    if ScreenManager.current and ScreenManager.current.keypressed then
+        ScreenManager.current.keypressed(key)
+    end
 end
 
 function ScreenManager.mousepressed(x, y, button)
-    -- TODO: delegar click a la pantalla actual
+    if ScreenManager.current and ScreenManager.current.mousepressed then
+        ScreenManager.current.mousepressed(x, y, button)
+    end
 end
 
 function ScreenManager.textinput(text)
-    -- TODO: delegar input de texto a la pantalla actual
+    if ScreenManager.current and ScreenManager.current.textinput then
+        ScreenManager.current.textinput(text)
+    end
 end
 
 return ScreenManager

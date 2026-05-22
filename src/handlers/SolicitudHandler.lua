@@ -1,12 +1,9 @@
--- SolicitudHandler.lua: Maneja eventos relacionados a solicitudes de tutoría
-
 local EventTypes = require("src.events.EventTypes")
-
 local SolicitudHandler = {}
-
 function SolicitudHandler.register(EventBus)
-    -- TODO: suscribir a SOLICITUD_ENVIADA
-    -- Al recibir: validar campos, publicar SOLICITUD_VALIDADA o SOLICITUD_RECHAZADA
+    EventBus.subscribe(EventTypes.SOLICITUD_ENVIADA, function(data)
+        -- Validación ya ocurre en la pantalla; aquí se registraría en BD real
+        print("[SolicitudHandler] Solicitud recibida")
+    end)
 end
-
 return SolicitudHandler

@@ -1,14 +1,9 @@
--- CierreHandler.lua: Maneja eventos de cierre de tutoría
-
 local EventTypes = require("src.events.EventTypes")
-
 local CierreHandler = {}
-
 function CierreHandler.register(EventBus)
-    -- TODO: suscribir a CIERRE_PROPUESTO
-    -- Al recibir: verificar condiciones (sesiones mínimas, conformidad estudiante)
-    -- Si cumple: publicar TUTORIA_CERRADA
-    -- Si no cumple: publicar ALERTA_COORDINADOR con motivo
+    EventBus.subscribe(EventTypes.CIERRE_PROPUESTO, function(data)
+        print("[CierreHandler] Propuesta de cierre recibida")
+        -- TODO: verificar condiciones y publicar TUTORIA_CERRADA
+    end)
 end
-
 return CierreHandler
