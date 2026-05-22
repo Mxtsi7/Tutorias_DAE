@@ -1,22 +1,25 @@
-local Anim     = require("src.anim.Anim")
-local tutorias = require("src.data.tutorias")
-local tutores  = require("src.data.tutores")
-local estud    = require("src.data.estudiantes")
+local Anim    = require("src.anim.Anim")
+local tutorias= require("src.data.tutorias")
+local tutores = require("src.data.tutores")
+local estud   = require("src.data.estudiantes")
 
-local SeguimientoScreen = {}
+local Seg={}
 local hover={} local stag={} local params={}
 
-function SeguimientoScreen.load(p)
+local function W() return love.graphics.getWidth() end
+local function H() return love.graphics.getHeight() end
+
+function Seg.load(p)
     params=p or {} hover={}
     stag=Anim.staggerList(#tutorias,0.06,0.4)
 end
 
-function SeguimientoScreen.update(dt)
+function Seg.update(dt)
     Anim.staggerUpdate(stag,dt)
     local mx,my=love.mouse.getPosition()
     for i,t in ipairs(tutorias) do
-        local ry=280+(i-1)*100
-        hover[i]=mx>=40 and mx<=1880 and my>=ry and my<=ry+88
+        local ry=240+(i-1)*94
+        hover[i]=mx>=30 and mx<=W()-30 and my>=ry and my<=ry+82
     end
 end
 
@@ -27,96 +30,126 @@ local function eColor(e)
     else return Colors.textSub end
 end
 
-function SeguimientoScreen.draw()
+function Seg.draw()
+    local WW,HH=W(),H()
     love.graphics.setColor(Colors.bg)
-    love.graphics.rectangle("fill",0,0,1920,1080)
+    love.graphics.rectangle("fill",0,0,WW,HH)
+
+    -- Header
     love.graphics.setColor(Colors.accent)
-    love.graphics.rectangle("fill",0,0,1920,80)
+    love.graphics.rectangle("fill",0,0,WW,68)
     love.graphics.setColor(1,1,1)
     love.graphics.setFont(Fonts.title)
-    love.graphics.printf("Seguimiento Semanal — Coordinador",0,24,1920,"center")
+    love.graphics.printf("Seguimiento Semanal \xe2\x80\x94 Coordinador",0,22,WW,"center")
 
     -- KPIs
     local kpis={
-        {label="Tutorías Activas",value=#tutorias,color=Colors.green},
-        {label="Con Alertas",     value=1,         color=Colors.orange},
-        {label="En Espera",       value=0,         color=Colors.textSub},
+        {label="Tutor\xc3\xadas Activas",value=#tutorias,color=Colors.green},
+        {label="Con Alertas",      value=1,            color=Colors.orange},
+        {label="En Espera",        value=0,            color=Colors.textSub},
     }
+    local kw=math.floor((WW-60)/3)
     for i,k in ipairs(kpis) do
-        local kx=40+(i-1)*460
+        local kx=30+(i-1)*(kw+10)
         love.graphics.setColor(Colors.card)
-        love.graphics.rectangle("fill",kx,90,420,90,14)
+        love.graphics.rectangle("fill",kx,78,kw,78,12)
         love.graphics.setColor(k.color)
-        love.graphics.rectangle("fill",kx,90,8,90,{4,0,0,4})
+        love.graphics.rectangle("fill",kx,78,6,78,{4,0,0,4})
         love.graphics.setColor(Colors.text)
         love.graphics.setFont(Fonts.big)
-        love.graphics.print(tostring(k.value),kx+28,96)
+        love.graphics.print(tostring(k.value),kx+22,84)
         love.graphics.setColor(Colors.textSub)
         love.graphics.setFont(Fonts.small)
-        love.graphics.print(k.label,kx+28,144)
+        love.graphics.print(k.label,kx+22,130)
     end
 
-    -- headers tabla
-    local cols={40,300,620,940,1150,1360,1580,1760}
-    local headers={"Estudiante","Área","Tutor","Sesiones","Avance","Estado","Ausencias","Acción"}
-    love.graphics.setColor(Colors.text)
+    -- Encabezados de tabla (proporcionales al ancho)
+    local cw=math.floor((WW-60)/8)
+    local cols={}
+    for i=1,8 do cols[i]=30+(i-1)*cw end
+    local headers={"Estudiante","\xc3\x81rea","Tutor","Sesiones","Avance","Estado","Ausencias","Acci\xc3\xb3n"}
+    love.graphics.setColor(Colors.textSub)
     love.graphics.setFont(Fonts.small)
     for i,h in ipairs(headers) do
-        love.graphics.print(h,cols[i],256)
+        love.graphics.print(h,cols[i],222)
     end
     love.graphics.setColor(Colors.border)
-    love.graphics.rectangle("fill",40,272,1840,1)
+    love.graphics.rectangle("fill",30,236,WW-60,1)
 
+    -- Filas
     for i,t in ipairs(tutorias) do
-        local ry=280+(i-1)*100
+        local ry=240+(i-1)*94
         local offY,alpha=Anim.staggerValue(stag,i)
         ry=ry+offY
-        love.graphics.setColor(hover[i] and {0.95,0.95,1} or (i%2==0 and Colors.bg or Colors.card))
-        love.graphics.setColor(
-            (hover[i] and {0.95,0.95,1} or (i%2==0 and Colors.bg or Colors.card))[1],
-            (hover[i] and {0.95,0.95,1} or (i%2==0 and Colors.bg or Colors.card))[2] or 1,
-            (hover[i] and {0.95,0.95,1} or (i%2==0 and Colors.bg or Colors.card))[3] or 1,
-            alpha)
-        love.graphics.rectangle("fill",40,ry,1840,88,10)
-        local e=estud[t.estudiante_id] or {nombre="—"}
-        local tu=tutores[t.tutor_id]  or {nombre="—"}
+        -- fondo fila
+        if hover[i] then
+            love.graphics.setColor(0.95,0.95,1,alpha)
+        elseif i%2==0 then
+            love.graphics.setColor(Colors.bg[1],Colors.bg[2],Colors.bg[3],alpha)
+        else
+            love.graphics.setColor(Colors.card[1],Colors.card[2],Colors.card[3],alpha)
+        end
+        love.graphics.rectangle("fill",30,ry,WW-60,82,8)
+
+        local e=estud[t.estudiante_id] or {nombre="\xe2\x80\x94",area_necesidad="\xe2\x80\x94"}
+        local tu=tutores[t.tutor_id]   or {nombre="\xe2\x80\x94"}
+
         love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],alpha)
         love.graphics.setFont(Fonts.body)
-        love.graphics.print(e.nombre,cols[1],ry+22)
-        love.graphics.print(t.area or "—",cols[2],ry+22)
-        love.graphics.print(tu.nombre,cols[3],ry+22)
-        love.graphics.print(t.sesiones_realizadas.." / 8",cols[4],ry+22)
+        love.graphics.print(e.nombre,     cols[1],ry+14)
+        love.graphics.setFont(Fonts.small)
+        love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],alpha)
+        love.graphics.print(e.area_necesidad or "\xe2\x80\x94",cols[1],ry+36)
+
+        love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],alpha)
+        love.graphics.setFont(Fonts.body)
+        love.graphics.print(t.area or "\xe2\x80\x94",cols[2],ry+26)
+        love.graphics.print(tu.nombre,   cols[3],ry+26)
+        love.graphics.print(t.sesiones_realizadas.." / 8",cols[4],ry+26)
+
+        -- avance con color
         local ac=t.nivel_avance_actual=="alto" and Colors.green
                 or t.nivel_avance_actual=="medio" and Colors.orange or Colors.red
         love.graphics.setColor(ac[1],ac[2],ac[3],alpha)
-        love.graphics.print(t.nivel_avance_actual or "bajo",cols[5],ry+22)
+        love.graphics.print(t.nivel_avance_actual or "bajo",cols[5],ry+26)
+
+        -- badge estado (ancho automático)
         local sc=eColor(t.estado)
+        local elabel=t.estado or "activa"
+        local etw=Fonts.small:getWidth(elabel)
         love.graphics.setColor(sc[1],sc[2],sc[3],0.15*alpha)
-        love.graphics.rectangle("fill",cols[6],ry+18,120,32,8)
+        love.graphics.rectangle("fill",cols[6],ry+18,etw+18,26,6)
         love.graphics.setColor(sc[1],sc[2],sc[3],alpha)
         love.graphics.setFont(Fonts.small)
-        love.graphics.printf(t.estado or "activa",cols[6],ry+26,120,"center")
+        love.graphics.print(elabel,cols[6]+9,ry+24)
+
+        -- ausencias
         love.graphics.setColor(t.ausencias_consecutivas>0 and Colors.red or Colors.textSub)
         love.graphics.setFont(Fonts.body)
-        love.graphics.print(tostring(t.ausencias_consecutivas),cols[7]+50,ry+22)
+        love.graphics.printf(tostring(t.ausencias_consecutivas),cols[7],ry+26,cw-4,"center")
+
+        -- boton detalle
+        local atw=Fonts.small:getWidth("Detalle")
         love.graphics.setColor(Colors.accentSoft[1],Colors.accentSoft[2],Colors.accentSoft[3],alpha)
-        love.graphics.rectangle("fill",cols[8],ry+18,110,32,8)
+        love.graphics.rectangle("fill",cols[8],ry+18,atw+18,26,6)
         love.graphics.setColor(Colors.accent[1],Colors.accent[2],Colors.accent[3],alpha)
         love.graphics.setFont(Fonts.small)
-        love.graphics.printf("Detalle",cols[8],ry+26,110,"center")
+        love.graphics.print("Detalle",cols[8]+9,ry+24)
     end
 
+    -- Botón Volver
     love.graphics.setColor(Colors.accent)
-    love.graphics.rectangle("fill",40,1016,160,46,12)
+    love.graphics.rectangle("fill",30,HH-64,130,44,10)
     love.graphics.setColor(1,1,1)
     love.graphics.setFont(Fonts.body)
-    love.graphics.printf("Volver",40,1030,160,"center")
+    love.graphics.printf("Volver",30,HH-50,130,"center")
 end
 
-function SeguimientoScreen.mousepressed(x,y,btn)
-    if x>=40 and x<=200 and y>=1016 and y<=1062 then
+function Seg.mousepressed(x,y,btn)
+    local HH=H()
+    if x>=30 and x<=160 and y>=HH-64 and y<=HH-20 then
         Nav.to("dashboard",{rol=params.rol},-1)
     end
 end
 
-return SeguimientoScreen
+return Seg
