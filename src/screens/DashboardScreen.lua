@@ -31,7 +31,6 @@ end
 function DS.load(p)
     params = p or {rol="estudiante"}
     hovNav={} hovCards={} pulse=0
-    -- Cargar tutorias desde BD segun rol
     if params.rol=="estudiante" and params.usuario_id then
         tutorias = TutoriaRepo.getByEstudiante(params.usuario_id)
     else
@@ -175,7 +174,11 @@ function DS.draw()
         local cy=cardsY0+row*(ch+CARD_GAP)
         local offY,alpha=Anim.staggerValue(stag,i)
         cy=cy+offY
-        local ac=avColor(t.nivel_avance_actual)
+        -- campos normalizados: nivel_avance, sesiones, ausencias
+        local nivel  = t.nivel_avance or t.nivel_avance_actual or "bajo"
+        local sesNum = t.sesiones or t.sesiones_realizadas or 0
+        local ausNum = t.ausencias or t.ausencias_consecutivas or 0
+        local ac=avColor(nivel)
         local isHov=hovCards[i]
 
         love.graphics.setColor(0,0,0,isHov and 0.08*alpha or 0.04*alpha)
@@ -196,7 +199,7 @@ function DS.draw()
         love.graphics.print(t.area or "\xc3\x81rea",cx+58,cy+24)
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],alpha)
         love.graphics.setFont(Fonts.small)
-        love.graphics.print("Tutor: "..(t.tutor_nombre or tostring(t.tutor_id)),cx+58,cy+42)
+        love.graphics.print("Tutor: "..(t.tutor_nombre or "\xe2\x80\x94"),cx+58,cy+42)
 
         love.graphics.setColor(Colors.border[1],Colors.border[2],Colors.border[3],alpha)
         love.graphics.rectangle("fill",cx+14,cy+70,cw-28,1)
@@ -206,14 +209,14 @@ function DS.draw()
         love.graphics.print("NIVEL DE AVANCE",cx+14,cy+80)
         love.graphics.setColor(ac[1],ac[2],ac[3],alpha)
         love.graphics.setFont(Fonts.body)
-        love.graphics.print(string.upper(t.nivel_avance_actual or "bajo"),cx+14,cy+96)
+        love.graphics.print(string.upper(nivel),cx+14,cy+96)
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],alpha)
         love.graphics.setFont(Fonts.small)
-        love.graphics.print(t.sesiones_realizadas.." / 8",cx+cw-70,cy+98)
+        love.graphics.print(tostring(sesNum).." / 8",cx+cw-70,cy+98)
 
         love.graphics.push()
         love.graphics.translate(cx+14,cy+122)
-        UI.progressBar3(0,0,cw-28,7,t.nivel_avance_actual)
+        UI.progressBar3(0,0,cw-28,7,nivel)
         love.graphics.pop()
 
         local elabel=t.estado or "activa"
@@ -227,10 +230,10 @@ function DS.draw()
         love.graphics.setFont(Fonts.small)
         love.graphics.print(elabel,cx+24,cy+142)
 
-        if (t.ausencias_consecutivas or 0)>0 then
+        if ausNum > 0 then
             love.graphics.setColor(Colors.red[1],Colors.red[2],Colors.red[3],alpha)
             love.graphics.setFont(Fonts.small)
-            love.graphics.print("! "..t.ausencias_consecutivas.." ausencia(s)",cx+14+etw+8,cy+142)
+            love.graphics.print("! "..ausNum.." ausencia(s)",cx+14+etw+8,cy+142)
         end
     end
 end
