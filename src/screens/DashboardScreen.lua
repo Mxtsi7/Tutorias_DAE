@@ -5,13 +5,37 @@ local Session     = require("src.session.Session")
 
 local DS = {}
 local SW = 240
-local nav = {
-    { label="Dashboard",    screen="dashboard",   active=true  },
-    { label="Mis Sesiones", screen="sesion",      active=false },
-    { label="Solicitudes",  screen="solicitud",   active=false },
-    { label="Seguimiento",  screen="seguimiento", active=false },
-    { label="Asignaci\xc3\xb3n",   screen="asignacion",  active=false },
+
+-- Nav por rol
+local NAV_POR_ROL = {
+    estudiante  = {
+        { label="Dashboard",   screen="dashboard" },
+        { label="Mis Sesiones",screen="sesion" },
+        { label="Solicitudes", screen="solicitud" },
+    },
+    tutor = {
+        { label="Dashboard",   screen="dashboard" },
+        { label="Mis Sesiones",screen="sesion" },
+    },
+    coordinador = {
+        { label="Dashboard",   screen="dashboard" },
+        { label="Solicitudes", screen="solicitud" },
+        { label="Seguimiento", screen="seguimiento" },
+        { label="Asignaci\xc3\xb3n", screen="asignacion" },
+    },
 }
+local BTN_POR_ROL = {
+    estudiante  = "+ Nueva Solicitud",
+    tutor       = "+ Registrar Sesi\xc3\xb3n",
+    coordinador = "+ Asignar Tutor",
+}
+local BTN_SCREEN = {
+    estudiante  = "solicitud",
+    tutor       = "sesion",
+    coordinador = "asignacion",
+}
+
+local nav = {}
 local hovNav={} local hovCards={} local stag={}
 local bannerA=nil local pulse=0 local params={}
 local tutorias={}
@@ -31,7 +55,14 @@ end
 function DS.load(p)
     params = p or {rol="estudiante"}
     hovNav={} hovCards={} pulse=0
-    if params.rol=="estudiante" and params.usuario_id then
+    -- Construir nav segun rol
+    local rol = params.rol or "estudiante"
+    nav = {}
+    for i,item in ipairs(NAV_POR_ROL[rol] or NAV_POR_ROL.estudiante) do
+        nav[i] = { label=item.label, screen=item.screen, active=(i==1) }
+    end
+    -- Cargar tutorias
+    if rol=="estudiante" and params.usuario_id then
         tutorias = TutoriaRepo.getByEstudiante(params.usuario_id)
     else
         tutorias = TutoriaRepo.getAll()
@@ -69,6 +100,7 @@ function DS.draw()
     local ba=bannerA:value()
     local mx2=MX()
     local cw2=CONTENT_W()
+    local rol = params.rol or "estudiante"
 
     love.graphics.setColor(Colors.bg)
     love.graphics.rectangle("fill",0,0,WW,HH)
@@ -98,9 +130,9 @@ function DS.draw()
     love.graphics.print(nombre(),68,98)
     love.graphics.setColor(Colors.textSub)
     love.graphics.setFont(Fonts.small)
-    love.graphics.print(string.upper(params.rol or "estudiante"),68,116)
+    love.graphics.print(string.upper(rol),68,116)
 
-    -- Nav
+    -- Nav filtrado
     for i,n in ipairs(nav) do
         local ny=210+(i-1)*52
         if n.active then
@@ -115,7 +147,8 @@ function DS.draw()
         love.graphics.print(n.label,38,ny+12)
     end
 
-    -- Boton Nueva Solicitud
+    -- Boton inferior segun rol
+    local btnLabel = BTN_POR_ROL[rol] or "+ Acci\xc3\xb3n"
     local p2=(math.sin(pulse)+1)/2
     love.graphics.setColor(Colors.accent[1],Colors.accent[2],Colors.accent[3],p2*0.15)
     love.graphics.rectangle("fill",6,HH-70,SW-12,56,14)
@@ -123,7 +156,7 @@ function DS.draw()
     love.graphics.rectangle("fill",12,HH-62,SW-24,44,12)
     love.graphics.setColor(1,1,1)
     love.graphics.setFont(Fonts.body)
-    love.graphics.printf("+ Nueva Solicitud",12,HH-51,SW-24,"center")
+    love.graphics.printf(btnLabel,12,HH-51,SW-24,"center")
 
     -- Saludo
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
@@ -174,10 +207,9 @@ function DS.draw()
         local cy=cardsY0+row*(ch+CARD_GAP)
         local offY,alpha=Anim.staggerValue(stag,i)
         cy=cy+offY
-        -- campos normalizados: nivel_avance, sesiones, ausencias
         local nivel  = t.nivel_avance or t.nivel_avance_actual or "bajo"
-        local sesNum = t.sesiones or t.sesiones_realizadas or 0
-        local ausNum = t.ausencias or t.ausencias_consecutivas or 0
+        local sesNum = t.sesiones     or t.sesiones_realizadas  or 0
+        local ausNum = t.ausencias    or t.ausencias_consecutivas or 0
         local ac=avColor(nivel)
         local isHov=hovCards[i]
 
@@ -240,17 +272,20 @@ end
 
 function DS.mousepressed(x,y,btn)
     local HH=H()
+    local rol = params.rol or "estudiante"
     for i,n in ipairs(nav) do
         local ny=210+(i-1)*52
         if x>=0 and x<=SW and y>=ny and y<=ny+44 then
             for j=1,#nav do nav[j].active=false end
             nav[i].active=true
-            Nav.to(n.screen,{rol=params.rol,usuario_id=params.usuario_id,nombre=params.nombre},1)
+            Nav.to(n.screen,{rol=rol,usuario_id=params.usuario_id,nombre=params.nombre},1)
             return
         end
     end
+    -- Boton inferior
     if x>=12 and x<=SW-12 and y>=HH-62 and y<=HH-14 then
-        Nav.to("solicitud",{rol=params.rol,usuario_id=params.usuario_id},1)
+        local dest = BTN_SCREEN[rol] or "solicitud"
+        Nav.to(dest,{rol=rol,usuario_id=params.usuario_id,nombre=params.nombre},1)
     end
 end
 
