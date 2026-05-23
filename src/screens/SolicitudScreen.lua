@@ -1,6 +1,6 @@
-local Anim     = require("src.anim.Anim")
-local EventBus = require("src.events.EventBus")
-local EventTypes = require("src.events.EventTypes")
+local Anim          = require("src.anim.Anim")
+local SolicitudRepo = require("src.db.SolicitudRepo")
+local Session       = require("src.session.Session")
 
 local S = {}
 local campos = {
@@ -12,8 +12,7 @@ local campos = {
 local campoA=1 local enviado=false local errorMsg=""
 local fadeIn=nil local params={}
 
-local PW = 480
-local PY = 40
+local PW=480 local PY=40
 local function W() return love.graphics.getWidth() end
 local function H() return love.graphics.getHeight() end
 local function PX() return math.floor((W()-PW)/2) end
@@ -28,63 +27,53 @@ end
 function S.update(dt) fadeIn:update(dt) end
 
 function S.draw()
-    local a   = fadeIn:value()
-    local px  = PX()
-    local ww,hh = W(),H()
-    local ph  = 74 + #campos*108 + 110
+    local a=fadeIn:value()
+    local px=PX()
+    local ww,hh=W(),H()
+    local ph=74+#campos*108+110
 
-    -- fondo oscuro
-    love.graphics.setColor(0.08,0.08,0.14, 0.4*a)
+    love.graphics.setColor(0.08,0.08,0.14,0.4*a)
     love.graphics.rectangle("fill",0,0,ww,hh)
-
-    -- sombra
-    love.graphics.setColor(0,0,0, 0.10*a)
+    love.graphics.setColor(0,0,0,0.10*a)
     love.graphics.rectangle("fill",px+4,PY+6,PW,ph,18)
-    -- panel
     love.graphics.setColor(1,1,1,a)
     love.graphics.rectangle("fill",px,PY,PW,ph,18)
 
-    -- header violeta: dos fills (sin tabla de radios)
     love.graphics.setColor(Colors.accent[1],Colors.accent[2],Colors.accent[3],a)
-    love.graphics.rectangle("fill",px,PY,    PW,60, 18)
-    love.graphics.rectangle("fill",px,PY+40, PW,20,  0)
+    love.graphics.rectangle("fill",px,PY,PW,60,18)
+    love.graphics.rectangle("fill",px,PY+40,PW,20,0)
     love.graphics.setColor(1,1,1,a)
     love.graphics.setFont(Fonts.title)
     love.graphics.printf("Nueva Solicitud de Tutor\xc3\xada",px,PY+16,PW,"center")
 
-    -- campos
     for i,c in ipairs(campos) do
-        local fy = PY+68+(i-1)*108
+        local fy=PY+68+(i-1)*108
         love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],a)
         love.graphics.setFont(Fonts.body)
-        love.graphics.print(c.label, px+22, fy)
-
-        local isFocus = (i==campoA)
-        local bc = isFocus and Colors.accent or (c.error and Colors.red or Colors.border)
-        -- borde fill doble (sin rectangle line)
+        love.graphics.print(c.label,px+22,fy)
+        local isFocus=(i==campoA)
+        local bc=isFocus and Colors.accent or (c.error and Colors.red or Colors.border)
         love.graphics.setColor(bc[1],bc[2],bc[3],a)
         love.graphics.rectangle("fill",px+22,fy+24,PW-44,44,12)
-        local ibg = isFocus and {0.97,0.96,1} or (c.error and {0.99,0.96,0.96} or {1,1,1})
+        local ibg=isFocus and {0.97,0.96,1} or (c.error and {0.99,0.96,0.96} or {1,1,1})
         love.graphics.setColor(ibg[1],ibg[2],ibg[3],a)
         love.graphics.rectangle("fill",px+24,fy+26,PW-48,40,10)
-
         love.graphics.setFont(Fonts.body)
         if c.value~="" then
             love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],a)
-            love.graphics.print(c.value..(isFocus and "_" or ""), px+34, fy+36)
+            love.graphics.print(c.value..(isFocus and "_" or ""),px+34,fy+36)
         else
             love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],a)
-            love.graphics.print(c.placeholder, px+34, fy+36)
+            love.graphics.print(c.placeholder,px+34,fy+36)
         end
         if c.error then
             love.graphics.setColor(Colors.red[1],Colors.red[2],Colors.red[3],a)
             love.graphics.setFont(Fonts.small)
-            love.graphics.print("Campo obligatorio", px+34, fy+72)
+            love.graphics.print("Campo obligatorio",px+34,fy+72)
         end
     end
 
-    -- mensaje
-    local my2 = PY+68+#campos*108+6
+    local my2=PY+68+#campos*108+6
     if enviado then
         love.graphics.setColor(Colors.greenSoft[1],Colors.greenSoft[2],Colors.greenSoft[3],a)
         love.graphics.rectangle("fill",px+22,my2,PW-44,40,10)
@@ -99,8 +88,7 @@ function S.draw()
         love.graphics.printf(errorMsg,px+22,my2+12,PW-44,"center")
     end
 
-    -- botones
-    local btnY = my2+50
+    local btnY=my2+50
     love.graphics.setColor(Colors.border[1],Colors.border[2],Colors.border[3],a)
     love.graphics.rectangle("fill",px+22,btnY,130,42,10)
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],a)
@@ -121,7 +109,7 @@ function S.mousepressed(x,y,btn)
     local my2=PY+68+#campos*108+6
     local btnY=my2+50
     if x>=px+22 and x<=px+152 and y>=btnY and y<=btnY+42 then
-        Nav.to("dashboard",{rol=params.rol},-1) return
+        Nav.to("dashboard",{rol=params.rol,usuario_id=params.usuario_id,nombre=Session.nombre},-1) return
     end
     if x>=px+PW-152 and x<=px+PW-22 and y>=btnY and y<=btnY+42 then
         errorMsg="" local valid=true
@@ -129,7 +117,12 @@ function S.mousepressed(x,y,btn)
             c.error=(c.value=="") if c.error then valid=false end
         end
         if valid then
-            EventBus.publish(EventTypes.SOLICITUD_ENVIADA,{campos=campos})
+            -- Guardar en BD
+            SolicitudRepo.crear(
+                Session.usuario_id or 1,
+                campos[1].value, campos[2].value,
+                campos[3].value, campos[4].value
+            )
             enviado=true errorMsg=""
         else
             errorMsg="Completa todos los campos" enviado=false

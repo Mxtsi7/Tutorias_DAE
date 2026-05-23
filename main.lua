@@ -6,6 +6,7 @@ local AsignacionHandler = require("src.handlers.AsignacionHandler")
 local SesionHandler     = require("src.handlers.SesionHandler")
 local AusenciaHandler   = require("src.handlers.AusenciaHandler")
 local CierreHandler     = require("src.handlers.CierreHandler")
+local DB                = require("src.db.DB")
 
 Colors = {
     bg         = {0.941, 0.945, 0.961},
@@ -23,13 +24,11 @@ Colors = {
 }
 
 Nav = require("src.anim.Transition")
-
--- Estado de pantalla completa
 Fullscreen = false
 
 function love.load()
     love.graphics.setBackgroundColor(Colors.bg)
-    love.graphics.setDefaultFilter("linear", "linear")  -- fix pixelado
+    love.graphics.setDefaultFilter("linear", "linear")
 
     Fonts = {
         title  = love.graphics.newFont(20),
@@ -38,6 +37,9 @@ function love.load()
         big    = love.graphics.newFont(30),
         huge   = love.graphics.newFont(44),
     }
+
+    -- Abrir base de datos (crea archivo + schema + seed)
+    DB.open()
 
     SolicitudHandler.register(EventBus)
     AsignacionHandler.register(EventBus)
@@ -48,6 +50,10 @@ function love.load()
     ScreenManager.load("login")
 end
 
+function love.quit()
+    DB.close()
+end
+
 function love.update(dt)
     Nav.update(dt)
     ScreenManager.update(dt)
@@ -55,59 +61,46 @@ end
 
 function love.draw()
     local W, H = love.graphics.getDimensions()
-    local ox = Nav.offsetX()
-    if ox ~= 0 then
-        love.graphics.push()
-        love.graphics.translate(ox, 0)
-    end
     ScreenManager.draw()
-    if ox ~= 0 then love.graphics.pop() end
     Nav.draw(W, H)
 
-    -- Botón pantalla completa (esquina superior derecha)
+    -- Boton pantalla completa
     local bx = W - 44
     local mx, my = love.mouse.getPosition()
-    local hovFS = mx >= bx and mx <= bx+34 and my >= 6 and my <= 6+34
-    love.graphics.setColor(0, 0, 0, hovFS and 0.12 or 0.06)
-    love.graphics.rectangle("fill", bx, 6, 34, 34, 6)
+    local hovFS = mx>=bx and mx<=bx+34 and my>=6 and my<=40
+    love.graphics.setColor(0,0,0, hovFS and 0.12 or 0.06)
+    love.graphics.rectangle("fill",bx,6,34,34,6)
     love.graphics.setColor(Colors.text)
     love.graphics.setFont(Fonts.small)
-    love.graphics.printf(Fullscreen and "[□]" or "[ ]", bx, 15, 34, "center")
+    love.graphics.printf(Fullscreen and "[o]" or "[ ]",bx,15,34,"center")
 end
 
 function love.keypressed(key)
-    if key == "f11" then
+    if key=="f11" then
         Fullscreen = not Fullscreen
-        love.window.setFullscreen(Fullscreen, "desktop")
+        love.window.setFullscreen(Fullscreen,"desktop")
         return
     end
-    if key == "escape" then
-        if Fullscreen then
-            Fullscreen = false
-            love.window.setFullscreen(false)
-            return
-        end
-        if ScreenManager.currentName ~= "login" then
-            Nav.to("login", nil, -1)
-        else
-            love.event.quit()
-        end
+    if key=="escape" then
+        if Fullscreen then Fullscreen=false love.window.setFullscreen(false) return end
+        if ScreenManager.currentName~="login" then
+            Nav.to("login",nil,-1)
+        else love.event.quit() end
         return
     end
     ScreenManager.keypressed(key)
 end
 
-function love.mousepressed(x, y, button)
+function love.mousepressed(x,y,button)
     if Nav.active then return end
-    -- clic en botón pantalla completa
-    local W = love.graphics.getWidth()
-    local bx = W - 44
-    if x >= bx and x <= bx+34 and y >= 6 and y <= 40 then
-        Fullscreen = not Fullscreen
-        love.window.setFullscreen(Fullscreen, "desktop")
+    local W2=love.graphics.getWidth()
+    local bx=W2-44
+    if x>=bx and x<=bx+34 and y>=6 and y<=40 then
+        Fullscreen=not Fullscreen
+        love.window.setFullscreen(Fullscreen,"desktop")
         return
     end
-    ScreenManager.mousepressed(x, y, button)
+    ScreenManager.mousepressed(x,y,button)
 end
 
 function love.textinput(text)
