@@ -40,16 +40,15 @@ function Seg.draw()
     love.graphics.setFont(Fonts.title)
     love.graphics.printf("Seguimiento Semanal \xe2\x80\x94 Coordinador",0,22,WW,"center")
 
-    -- contar alertas
     local nActivas,nAlertas=0,0
     for _,t in ipairs(tutorias) do
         if t.estado=="activa" or t.estado=="activa_con_alerta" then nActivas=nActivas+1 end
         if t.estado=="activa_con_alerta" or t.estado=="suspendida" then nAlertas=nAlertas+1 end
     end
     local kpis={
-        {label="Tutor\xc3\xadas Activas",value=nActivas, color=Colors.green},
-        {label="Con Alertas",           value=nAlertas, color=Colors.orange},
-        {label="En Espera",             value=0,        color=Colors.textSub},
+        {label="Tutor\xc3\xadas Activas", value=nActivas, color=Colors.green},
+        {label="Con Alertas",            value=nAlertas, color=Colors.orange},
+        {label="En Espera",              value=0,        color=Colors.textSub},
     }
     local kw=math.floor((WW-60)/3)
     for i,k in ipairs(kpis) do
@@ -80,6 +79,11 @@ function Seg.draw()
         local ry=240+(i-1)*94
         local offY,alpha=Anim.staggerValue(stag,i)
         ry=ry+offY
+        -- campos normalizados con fallback
+        local nivel  = t.nivel_avance or t.nivel_avance_actual or "bajo"
+        local sesNum = t.sesiones     or t.sesiones_realizadas  or 0
+        local ausNum = t.ausencias    or t.ausencias_consecutivas or 0
+
         if hover[i] then love.graphics.setColor(0.95,0.95,1,alpha)
         elseif i%2==0 then love.graphics.setColor(Colors.bg[1],Colors.bg[2],Colors.bg[3],alpha)
         else love.graphics.setColor(Colors.card[1],Colors.card[2],Colors.card[3],alpha) end
@@ -100,12 +104,11 @@ function Seg.draw()
         love.graphics.setFont(Fonts.body)
         love.graphics.print(t.area or "\xe2\x80\x94",c2+4,ry+26)
         love.graphics.print(t.tutor_nombre or "\xe2\x80\x94",c3+4,ry+26)
-        love.graphics.print(t.sesiones_realizadas.." / 8",c4+4,ry+26)
+        love.graphics.print(tostring(sesNum).." / 8",c4+4,ry+26)
 
-        local ac=t.nivel_avance_actual=="alto" and Colors.green
-                or t.nivel_avance_actual=="medio" and Colors.orange or Colors.red
+        local ac = nivel=="alto" and Colors.green or nivel=="medio" and Colors.orange or Colors.red
         love.graphics.setColor(ac[1],ac[2],ac[3],alpha)
-        love.graphics.print(t.nivel_avance_actual or "bajo",c5+4,ry+26)
+        love.graphics.print(nivel,c5+4,ry+26)
 
         local sc=eColor(t.estado)
         local el=t.estado or "activa"
@@ -116,9 +119,9 @@ function Seg.draw()
         love.graphics.setFont(Fonts.small)
         love.graphics.print(el,c6+13,ry+24)
 
-        love.graphics.setColor((t.ausencias_consecutivas or 0)>0 and Colors.red or Colors.textSub)
+        love.graphics.setColor(ausNum>0 and Colors.red or Colors.textSub)
         love.graphics.setFont(Fonts.body)
-        love.graphics.printf(tostring(t.ausencias_consecutivas or 0),c7,ry+26,colW-4,"center")
+        love.graphics.printf(tostring(ausNum),c7,ry+26,colW-4,"center")
 
         local dtw=Fonts.small:getWidth("Detalle")+18
         love.graphics.setColor(Colors.accentSoft[1],Colors.accentSoft[2],Colors.accentSoft[3],alpha)
