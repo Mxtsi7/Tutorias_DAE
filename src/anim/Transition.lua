@@ -1,37 +1,32 @@
--- Transicion: fade-out simple tras cargar la nueva pantalla
+-- Sin parpadeo: carga pantalla y cubre con negro desde el primer frame
 local SM = require("src.screens.ScreenManager")
 local T  = {}
 
 T.active     = false
 T.alpha      = 0
-T.nextName   = nil
-T.nextParams = nil
-T.speed      = 4.5  -- fade-out rapido (~0.22s)
+T.speed      = 5.0
 
 function T.to(screenName, params, _)
     if T.active then return end
-    -- Carga inmediata + fade desde negro a transparente
     SM.load(screenName, params)
+    T.alpha  = 1.0
     T.active = true
-    T.alpha  = 1
 end
 
 function T.update(dt)
     if not T.active then return end
-    T.alpha = T.alpha - T.speed * dt
-    if T.alpha <= 0 then
-        T.alpha  = 0
+    T.alpha = math.max(0, T.alpha - T.speed * dt)
+    if T.alpha == 0 then
         T.active = false
     end
 end
 
 function T.draw(W, H)
-    if T.alpha <= 0 then return end
+    -- Siempre dibuja si active, incluso en alpha=1 (primer frame)
+    if not T.active and T.alpha <= 0 then return end
     W = W or love.graphics.getWidth()
     H = H or love.graphics.getHeight()
-    -- easing: desvanece con curva suave
-    local a = T.alpha * T.alpha
-    love.graphics.setColor(0.10, 0.08, 0.16, a)
+    love.graphics.setColor(0.10, 0.08, 0.16, T.alpha * T.alpha)
     love.graphics.rectangle("fill", 0, 0, W, H)
 end
 
