@@ -1,65 +1,59 @@
--- Seed: inserta datos iniciales solo si la BD esta vacia
 local DB = require("src.db.DB")
 
 local Seed = {}
 
 function Seed.run()
-    local rows = DB.query("SELECT COUNT(*) as n FROM usuarios")
-    if rows[1] and rows[1].n > 0 then return end  -- ya tiene datos
-
-    DB.exec("BEGIN TRANSACTION")
+    if #DB.all("usuarios") > 0 then return end  -- ya tiene datos
 
     -- Usuarios
-    DB.exec("INSERT INTO usuarios(nombre,rol) VALUES('Valentina Torres','estudiante')")
-    local uid_val = DB.lastId()
-    DB.exec("INSERT INTO usuarios(nombre,rol) VALUES('Diego Ramirez','estudiante')")
-    local uid_diego = DB.lastId()
-    DB.exec("INSERT INTO usuarios(nombre,rol) VALUES('Sofia Munoz','estudiante')")
-    local uid_sofia = DB.lastId()
-    DB.exec("INSERT INTO usuarios(nombre,rol) VALUES('Roberto Campos','tutor')")
-    local uid_rob = DB.lastId()
-    DB.exec("INSERT INTO usuarios(nombre,rol) VALUES('Carolina Vega','tutor')")
-    local uid_car = DB.lastId()
-    DB.exec("INSERT INTO usuarios(nombre,rol) VALUES('Miguel Fuentes','tutor')")
-    local uid_mig = DB.lastId()
-    DB.exec("INSERT INTO usuarios(nombre,rol) VALUES('Coordinador DAE','coordinador')")
-    local uid_coord = DB.lastId()
+    local u1 = DB.insert("usuarios", {nombre="Valentina Torres", rol="estudiante"})
+    local u2 = DB.insert("usuarios", {nombre="Diego Ramirez",    rol="estudiante"})
+    local u3 = DB.insert("usuarios", {nombre="Sofia Munoz",      rol="estudiante"})
+    local u4 = DB.insert("usuarios", {nombre="Roberto Campos",   rol="tutor"})
+    local u5 = DB.insert("usuarios", {nombre="Carolina Vega",    rol="tutor"})
+    local u6 = DB.insert("usuarios", {nombre="Miguel Fuentes",   rol="tutor"})
+    DB.insert("usuarios", {nombre="Coordinador DAE", rol="coordinador"})
 
     -- Tutores
-    DB.exec(string.format(
-        "INSERT INTO tutores(usuario_id,nombre,areas_competencia,disponibilidad,tutorados_activos,limite,incidentes_recientes) VALUES(%d,'Roberto Campos','Estadistica,Matematicas','martes,jueves',2,3,0)",
-        uid_rob))
-    local tid1 = DB.lastId()
-    DB.exec(string.format(
-        "INSERT INTO tutores(usuario_id,nombre,areas_competencia,disponibilidad,tutorados_activos,limite,incidentes_recientes) VALUES(%d,'Carolina Vega','Gestion de Proyectos,Administracion','lunes,miercoles',1,3,0)",
-        uid_car))
-    local tid2 = DB.lastId()
-    DB.exec(string.format(
-        "INSERT INTO tutores(usuario_id,nombre,areas_competencia,disponibilidad,tutorados_activos,limite,incidentes_recientes) VALUES(%d,'Miguel Fuentes','Gestion de Proyectos,Liderazgo','martes,viernes',2,3,1)",
-        uid_mig))
-    local tid3 = DB.lastId()
+    local t1 = DB.insert("tutores", {usuario_id=u4, nombre="Roberto Campos",
+        areas="Estadistica,Matematicas", disponibilidad="martes,jueves",
+        tutorados_activos=2, limite=3, incidentes=0})
+    local t2 = DB.insert("tutores", {usuario_id=u5, nombre="Carolina Vega",
+        areas="Gestion de Proyectos,Administracion", disponibilidad="lunes,miercoles",
+        tutorados_activos=1, limite=3, incidentes=0})
+    local t3 = DB.insert("tutores", {usuario_id=u6, nombre="Miguel Fuentes",
+        areas="Gestion de Proyectos,Liderazgo", disponibilidad="martes,viernes",
+        tutorados_activos=2, limite=3, incidentes=1})
 
     -- Estudiantes
-    DB.exec(string.format("INSERT INTO estudiantes(usuario_id,nombre,area_necesidad) VALUES(%d,'Valentina Torres','Estadistica Aplicada')", uid_val))
-    local eid1 = DB.lastId()
-    DB.exec(string.format("INSERT INTO estudiantes(usuario_id,nombre,area_necesidad) VALUES(%d,'Diego Ramirez','Gestion de Proyectos')", uid_diego))
-    local eid2 = DB.lastId()
-    DB.exec(string.format("INSERT INTO estudiantes(usuario_id,nombre,area_necesidad) VALUES(%d,'Sofia Munoz','Comunicacion Oral')", uid_sofia))
-    local eid3 = DB.lastId()
+    local e1 = DB.insert("estudiantes", {usuario_id=u1, nombre="Valentina Torres", area_necesidad="Estadistica Aplicada"})
+    local e2 = DB.insert("estudiantes", {usuario_id=u2, nombre="Diego Ramirez",    area_necesidad="Gestion de Proyectos"})
+    local e3 = DB.insert("estudiantes", {usuario_id=u3, nombre="Sofia Munoz",       area_necesidad="Comunicacion Oral"})
 
     -- Tutorias
-    DB.exec(string.format(
-        "INSERT INTO tutorias(estudiante_id,tutor_id,area,estado,nivel_avance_actual,sesiones_realizadas,ausencias_consecutivas,fecha_inicio) VALUES(%d,%d,'Estadistica Aplicada','activa','medio',5,0,'2026-03-10')",
-        eid1, tid1))
-    DB.exec(string.format(
-        "INSERT INTO tutorias(estudiante_id,tutor_id,area,estado,nivel_avance_actual,sesiones_realizadas,ausencias_consecutivas,fecha_inicio) VALUES(%d,%d,'Gestion de Proyectos','activa_con_alerta','bajo',3,1,'2026-03-15')",
-        eid2, tid3))
-    DB.exec(string.format(
-        "INSERT INTO tutorias(estudiante_id,tutor_id,area,estado,nivel_avance_actual,sesiones_realizadas,ausencias_consecutivas,fecha_inicio) VALUES(%d,%d,'Comunicacion Oral','activa','bajo',2,0,'2026-04-01')",
-        eid3, tid2))
+    DB.insert("tutorias", {
+        estudiante_id=e1, tutor_id=t1,
+        area="Estadistica Aplicada", estado="activa",
+        nivel_avance="medio", sesiones=5, ausencias=0,
+        tutor_nombre="Roberto Campos", estudiante_nombre="Valentina Torres",
+        area_necesidad="Estadistica Aplicada",
+    })
+    DB.insert("tutorias", {
+        estudiante_id=e2, tutor_id=t3,
+        area="Gestion de Proyectos", estado="activa_con_alerta",
+        nivel_avance="bajo", sesiones=3, ausencias=1,
+        tutor_nombre="Miguel Fuentes", estudiante_nombre="Diego Ramirez",
+        area_necesidad="Gestion de Proyectos",
+    })
+    DB.insert("tutorias", {
+        estudiante_id=e3, tutor_id=t2,
+        area="Comunicacion Oral", estado="activa",
+        nivel_avance="bajo", sesiones=2, ausencias=0,
+        tutor_nombre="Carolina Vega", estudiante_nombre="Sofia Munoz",
+        area_necesidad="Comunicacion Oral",
+    })
 
-    DB.exec("COMMIT")
-    print("[Seed] Datos iniciales insertados correctamente.")
+    print("[Seed] Datos iniciales insertados.")
 end
 
 return Seed

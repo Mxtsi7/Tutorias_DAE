@@ -1,15 +1,12 @@
--- Repositorio de usuarios y sesion activa
 local DB = require("src.db.DB")
-
-local R = {}
+local R  = {}
 
 function R.getByRol(rol)
-    return DB.query("SELECT * FROM usuarios WHERE rol=? LIMIT 1", {rol})
+    return DB.find("usuarios", function(u) return u.rol == rol end)
 end
 
 function R.getById(id)
-    local rows = DB.query("SELECT * FROM usuarios WHERE id=?", {id})
-    return rows[1]
+    return DB.find("usuarios", function(u) return u.id == id end)
 end
 
 return R
