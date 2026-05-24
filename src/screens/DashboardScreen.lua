@@ -164,14 +164,14 @@ function DS.draw()
     love.graphics.setFont(Fonts.body)
     love.graphics.printf(btnLabel,12,HH-51,SW-24,"center")
 
-    -- Saludo
+    -- Saludo (titulo grande en y=22)
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.big)
     love.graphics.print("Bienvenido, "..nombre().."!",mx2,22)
+
+    -- Subtitulo en y=56
     love.graphics.setFont(Fonts.body)
     love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
-
-    -- Subtitulo contextual por rol
     local subtitulo
     if rol == "coordinador" then
         local nPend = #DB.where("solicitudes", function(s) return s.estado=="pendiente" end)
@@ -184,8 +184,8 @@ function DS.draw()
     love.graphics.print(subtitulo, mx2, 56)
 
     -- Banner Prox Sesion: solo para estudiante y tutor
-    local banH = math.max(90, math.floor(HH*0.12))
-    local banW = cw2
+    local banH    = math.max(90, math.floor(HH*0.12))
+    local banW    = cw2
     local cardsY0
 
     if rol ~= "coordinador" then
@@ -203,7 +203,7 @@ function DS.draw()
         love.graphics.setFont(Fonts.body)
         local proxArea = tutorias[1] and (tutorias[1].area or "Sin sesiones") or "Sin sesiones"
         local proxLabel = rol=="tutor"
-            and (proxArea.." - ".. (tutorias[1] and tutorias[1].estudiante_nombre or "Sin tutorias"))
+            and (proxArea.." - "..(tutorias[1] and tutorias[1].estudiante_nombre or "Sin tutorias"))
             or  (proxArea.." - Sesion pendiente")
         love.graphics.print(proxLabel,mx2+34,76+38)
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
@@ -216,11 +216,11 @@ function DS.draw()
         love.graphics.printf("Unirse >",mx2+banW-120,76+banH/2-9,106,"center")
         cardsY0 = 76+banH+22
     else
-        -- Coordinador: las cards empiezan mas arriba sin el banner
-        cardsY0 = 80
+        -- Coordinador: titulo en 56+20=76 → cards a partir de 76+28+8 = 112
+        cardsY0 = 112
     end
 
-    -- Titulo cards
+    -- Titulo seccion cards (siempre 28px antes de cardsY0)
     local cardsLabel = rol=="coordinador" and "Tutor\xc3\xadas en curso" or "Tus Tutor\xc3\xadas Activas"
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.body)
@@ -260,7 +260,6 @@ function DS.draw()
         love.graphics.print(t.area or "\xc3\x81rea",cx+58,cy+24)
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],alpha)
         love.graphics.setFont(Fonts.small)
-        -- Para coordinador mostrar el estudiante, para los demas el tutor
         local subInfo = rol=="coordinador"
             and "Est: "..(t.estudiante_nombre or "\xe2\x80\x94")
             or  "Tutor: "..(t.tutor_nombre or "\xe2\x80\x94")
