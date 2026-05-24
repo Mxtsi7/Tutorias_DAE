@@ -28,15 +28,15 @@ local BTN_POR_ROL = {
     tutor       = "+ Registrar Sesi\xc3\xb3n",
     coordinador = "+ Asignar Tutor",
 }
--- params extras que pasa el boton inferior segun rol
 local BTN_SCREEN = {
     estudiante  = "solicitud",
     tutor       = "sesion",
     coordinador = "asignacion",
 }
+-- params extras que pasa el boton inferior segun rol
 local BTN_EXTRA = {
     estudiante  = { modo="nueva" },
-    tutor       = {},
+    tutor       = { modo="nueva" },  -- formulario registrar sesion
     coordinador = {},
 }
 
