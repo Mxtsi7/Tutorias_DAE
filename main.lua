@@ -39,13 +39,18 @@ function love.load()
     }
 
     -- Abrir base de datos (crea archivo + schema + seed)
-    DB.open()
+DB.open()
 
-    SolicitudHandler.register(EventBus)
-    AsignacionHandler.register(EventBus)
-    SesionHandler.register(EventBus)
-    AusenciaHandler.register(EventBus)
-    CierreHandler.register(EventBus)
+print("Cargando SolicitudHandler...")
+SolicitudHandler.register(EventBus)
+print("Cargando AsignacionHandler...")
+AsignacionHandler.register(EventBus)
+print("Cargando SesionHandler...")
+SesionHandler.register(EventBus)
+print("Cargando AusenciaHandler...")
+AusenciaHandler.register(EventBus)
+print("Cargando CierreHandler...")
+CierreHandler.register(EventBus)
 
     ScreenManager.load("login")
 end

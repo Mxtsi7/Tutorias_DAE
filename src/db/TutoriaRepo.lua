@@ -11,25 +11,74 @@ function R.getByEstudiante(usuario_id)
     return DB.where("tutorias", function(t) return t.estudiante_id == est.id end)
 end
 
+function R.getById(id)
+    return DB.find("tutorias", function(t) return t.id == id end)
+end
+
 function R.registrarSesion(tutoria_id, avance, asistencia)
-    DB.update("tutorias", function(t) return t.id == tutoria_id end, function()
-    end)
-    local t = DB.find("tutorias", function(t) return t.id == tutoria_id end)
-    if not t then return end
-
-    if asistencia == "Asistio" then
-        t.sesiones   = (t.sesiones or 0) + 1
-        t.ausencias  = 0
-    elseif asistencia == "Ausencia injust." then
-        t.ausencias  = (t.ausencias or 0) + 1
+    local t = DB.find("tutorias", function(r) return r.id == tutoria_id end)
+    if not t then
+        print("[TutoriaRepo] Tutoria no encontrada: " .. tostring(tutoria_id))
+        return
     end
-    t.nivel_avance = avance
-
-    if t.ausencias >= 3 then t.estado = "suspendida"
-    elseif t.ausencias >= 1 then t.estado = "activa_con_alerta"
-    else t.estado = "activa" end
-
+    local sesiones  = t.sesiones  or 0
+    local ausencias = t.ausencias or 0
+    if asistencia == "Asistio" then
+        sesiones  = sesiones + 1
+        ausencias = 0
+    elseif asistencia == "Ausencia injust." then
+        ausencias = ausencias + 1
+    elseif asistencia == "Ausencia just." then
+        ausencias = 0
+    end
+    local estado = t.estado or "activa"
+    if ausencias >= 2 then
+        estado = "suspendida"
+    elseif ausencias == 1 then
+        estado = "activa_con_alerta"
+    else
+        estado = "activa"
+    end
+    t.sesiones     = sesiones
+    t.ausencias    = ausencias
+    t.nivel_avance = avance or t.nivel_avance
+    t.estado       = estado
     DB.save()
+    print("[TutoriaRepo] sesiones: " .. sesiones ..
+          " | ausencias: " .. ausencias .. " | estado: " .. estado)
+end
+
+function R.cambiarEstado(tutoria_id, nuevoEstado)
+    local t = DB.find("tutorias", function(r) return r.id == tutoria_id end)
+    if not t then return end
+    t.estado = nuevoEstado
+    DB.save()
+end
+
+function R.proponerCierre(tutoria_id)
+    local t = DB.find("tutorias", function(r) return r.id == tutoria_id end)
+    if not t then return false, "Tutoria no encontrada" end
+    local sesiones = t.sesiones or 0
+    local nivel    = t.nivel_avance or "bajo"
+    local cumple = false
+    if nivel == "alto"  and sesiones >= 4 then cumple = true end
+    if nivel == "medio" and sesiones >= 6 then cumple = true end
+    if cumple then
+        t.estado       = "cerrada_exitosamente"
+        t.fecha_cierre = os.date("%Y-%m-%d")
+        if t.tutor_id then
+            local tutor = DB.find("tutores", function(r) return r.id == t.tutor_id end)
+            if tutor and (tutor.tutorados_activos or 0) > 0 then
+                tutor.tutorados_activos = tutor.tutorados_activos - 1
+            end
+        end
+        DB.save()
+        return true, "Tutoria cerrada exitosamente"
+    else
+        local falta = nivel == "alto" and math.max(0, 4 - sesiones)
+                                      or math.max(0, 6 - sesiones)
+        return false, "Faltan " .. falta .. " sesion(es) para nivel " .. nivel
+    end
 end
 
 return R

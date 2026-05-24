@@ -1,21 +1,33 @@
--- Solicitud.lua: Entidad que representa una solicitud de tutoría
--- Estados posibles: borrador, pendiente, en_espera, asignada, retirada
-
 local Solicitud = {}
 Solicitud.__index = Solicitud
 
 function Solicitud.new(datos)
-    -- TODO: crear nueva solicitud con campos:
-    -- area_tematica, nivel_urgencia, disponibilidad, modalidad, estado
+    local self = setmetatable({}, Solicitud)
+    self.area_tematica   = datos.area_tematica   or ""
+    self.nivel_urgencia  = datos.nivel_urgencia  or ""
+    self.disponibilidad  = datos.disponibilidad  or ""
+    self.modalidad       = datos.modalidad       or ""
+    self.estado          = datos.estado          or "borrador"
+    self.historial       = {}
+    self.fecha_creacion  = os.date("%Y-%m-%d")
+    return self
 end
 
 function Solicitud:validar()
-    -- TODO: verificar que los 4 campos obligatorios estén completos
-    -- retornar true/false y lista de campos faltantes
+    local faltantes = {}
+    if self.area_tematica  == "" then faltantes[#faltantes+1] = "area_tematica"  end
+    if self.nivel_urgencia == "" then faltantes[#faltantes+1] = "nivel_urgencia" end
+    if self.disponibilidad == "" then faltantes[#faltantes+1] = "disponibilidad" end
+    if self.modalidad      == "" then faltantes[#faltantes+1] = "modalidad"      end
+    return #faltantes == 0, faltantes
 end
 
 function Solicitud:cambiarEstado(nuevoEstado)
-    -- TODO: actualizar self.estado y registrar timestamp del cambio
+    local anterior = self.estado
+    self.estado = nuevoEstado
+    self.historial[#self.historial+1] = {
+        de = anterior, a = nuevoEstado, when = os.date("%Y-%m-%d %H:%M:%S"),
+    }
 end
 
 return Solicitud
