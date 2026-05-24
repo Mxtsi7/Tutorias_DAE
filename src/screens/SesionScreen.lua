@@ -16,13 +16,16 @@ local guardado=false local fadeIn=nil local params={}
 local tutorias={} local tutoriaSel=1
 local historial={} local scrollY=0
 
+local MODO_FORM  = "nueva"
+local MODO_LISTA = "lista"
+
 local PW=500 local PY=40
 local function W() return love.graphics.getWidth() end
 local function H() return love.graphics.getHeight() end
 local function PX() return math.floor((W()-PW)/2) end
 
 function SS.load(p)
-    params  = p or {}
+    params   = p or {}
     guardado = false
     campoA   = 1
     avSel    = 1
@@ -31,15 +34,23 @@ function SS.load(p)
     for _,c in ipairs(campos) do c.value="" end
     campos[1].value = os.date("%Y-%m-%d")
 
-    if Session.rol == "tutor" then
-        tutorias    = TutoriaRepo.getAll()
-        tutoriaSel  = 1
-        historial   = {}
+    local rol = Session.rol or params.rol or "estudiante"
+    local modo = params.modo or MODO_LISTA
+
+    if modo == MODO_FORM then
+        -- formulario: solo tutores
+        tutorias   = TutoriaRepo.getAll()
+        tutoriaSel = 1
+        historial  = {}
+    elseif rol == "tutor" then
+        -- historial del tutor
+        historial = SesionRepo.getByTutor(Session.usuario_id or params.usuario_id or 1)
+        tutorias  = {}
     else
-        -- estudiante: cargar historial de todas sus tutorias
-        tutorias  = TutoriaRepo.getByEstudiante(Session.usuario_id or 1)
+        -- historial del estudiante
+        local ts = TutoriaRepo.getByEstudiante(Session.usuario_id or 1)
         historial = {}
-        for _,t in ipairs(tutorias) do
+        for _,t in ipairs(ts) do
             local ses = SesionRepo.getByTutoria(t.id)
             for _,s in ipairs(ses) do
                 s._area        = t.area or "\xe2\x80\x94"
@@ -47,18 +58,15 @@ function SS.load(p)
                 historial[#historial+1] = s
             end
         end
-        -- ordenar por fecha descendente
-        table.sort(historial, function(a,b)
-            return (a.fecha or "") > (b.fecha or "")
-        end)
+        table.sort(historial, function(a,b) return (a.fecha or "") > (b.fecha or "") end)
     end
     fadeIn = Anim.new(0,1,0.4,"easeOut")
 end
 
 function SS.update(dt) fadeIn:update(dt) end
 
--- ─── VISTA TUTOR ────────────────────────────────────────────────────────────
-local function drawTutor(a)
+-- === FORMULARIO (tutor, modo nueva) ===
+local function drawForm(a)
     local px  = PX()
     local ph  = 74 + #campos*110 + 230
 
@@ -82,7 +90,7 @@ local function drawTutor(a)
     love.graphics.setFont(Fonts.small)
     love.graphics.print("Tutor\xc3\xada:",px+24,selY)
     local tname = tutorias[tutoriaSel] and
-        ((tutorias[tutoriaSel].estudiante_nombre or tutorias[tutoriaSel].area) or "Sin tutor\xc3\xadas") or "Sin tutor\xc3\xadas"
+        (tutorias[tutoriaSel].estudiante_nombre or tutorias[tutoriaSel].area or "Sin tutor\xc3\xadas") or "Sin tutor\xc3\xadas"
     love.graphics.setColor(Colors.accent[1],Colors.accent[2],Colors.accent[3],a)
     love.graphics.setFont(Fonts.body)
     love.graphics.print("< "..tname.." >",px+90,selY-2)
@@ -108,7 +116,7 @@ local function drawTutor(a)
         end
     end
 
-    local sy = PY+96+#campos*110
+    local sy    = PY+96+#campos*110
     local btnW3 = math.floor((PW-48-8)/3)
     local avColors = {Colors.red, Colors.orange, Colors.green}
 
@@ -161,40 +169,42 @@ local function drawTutor(a)
     love.graphics.printf("Guardar",px+PW-154,btnY+13,130,"center")
 end
 
--- ─── VISTA ESTUDIANTE (historial) ────────────────────────────────────────────
-local function drawEstudiante(a)
+-- === HISTORIAL (estudiante o tutor en modo lista) ===
+local function drawHistorial(a, esTutor)
     local WW,HH = W(),H()
     love.graphics.setColor(Colors.bg)
     love.graphics.rectangle("fill",0,0,WW,HH)
 
-    -- Header
     love.graphics.setColor(Colors.accent)
     love.graphics.rectangle("fill",0,0,WW,68)
     love.graphics.setColor(1,1,1)
     love.graphics.setFont(Fonts.title)
-    love.graphics.printf("Mis Sesiones",0,22,WW,"center")
+    love.graphics.printf(esTutor and "Mis Sesiones Registradas" or "Mis Sesiones",0,22,WW,"center")
 
     local margin = 40
     local TW     = WW - margin*2
-    local ROW_H  = 72
-    local startY = 90
+    local ROW_H  = 68
+    local startY = 86
+
+    local cols = esTutor
+        and {"Fecha","Estudiante","\xc3\x81rea","Duraci\xc3\xb3n","Asistencia","Avance","Temas"}
+        or  {"Fecha","\xc3\x81rea","Tutor","Duraci\xc3\xb3n","Asistencia","Avance","Temas"}
+    local ncols = #cols
+    local cw    = math.floor(TW/ncols)
+
+    love.graphics.setColor(Colors.textSub)
+    love.graphics.setFont(Fonts.small)
+    for i,h in ipairs(cols) do
+        love.graphics.print(h, margin+(i-1)*cw, startY)
+    end
+    love.graphics.setColor(Colors.border)
+    love.graphics.rectangle("fill",margin,startY+18,TW,1)
 
     if #historial == 0 then
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],a)
         love.graphics.setFont(Fonts.body)
-        love.graphics.printf("No tienes sesiones registradas todav\xc3\xada.",0,HH/2-20,WW,"center")
+        love.graphics.printf("No hay sesiones registradas todav\xc3\xada.",0,HH/2-20,WW,"center")
     else
-        -- Encabezados
-        local cols = {"Fecha","\xc3\x81rea","Tutor","Duraci\xc3\xb3n","Asistencia","Avance","Temas"}
-        local cw   = math.floor(TW/7)
-        love.graphics.setColor(Colors.textSub)
-        love.graphics.setFont(Fonts.small)
-        for i,h in ipairs(cols) do
-            love.graphics.print(h, margin+(i-1)*cw, startY)
-        end
-        love.graphics.setColor(Colors.border)
-        love.graphics.rectangle("fill",margin,startY+18,TW,1)
-
         local avColor = function(n)
             if n=="alto" then return Colors.green
             elseif n=="medio" then return Colors.orange
@@ -206,122 +216,119 @@ local function drawEstudiante(a)
             else return Colors.red end
         end
 
-        for idx, s in ipairs(historial) do
+        for idx,s in ipairs(historial) do
             local ry = startY + 24 + (idx-1)*ROW_H + scrollY
-            if ry > startY and ry < HH - 60 then
+            if ry > startY and ry < HH-60 then
                 local bg = idx%2==0 and Colors.bg or Colors.card
                 love.graphics.setColor(bg[1],bg[2],bg[3],a)
                 love.graphics.rectangle("fill",margin,ry,TW,ROW_H-6,8)
 
                 love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],a)
                 love.graphics.setFont(Fonts.small)
-                love.graphics.print(s.fecha or "\xe2\x80\x94",          margin+0*cw+8, ry+12)
-                love.graphics.print(s._area or "\xe2\x80\x94",           margin+1*cw+8, ry+12)
-                love.graphics.print(s._tutor or "\xe2\x80\x94",          margin+2*cw+8, ry+12)
-                love.graphics.print((s.duracion or "\xe2\x80\x94").." min", margin+3*cw+8, ry+12)
+                love.graphics.print(s.fecha or "\xe2\x80\x94",            margin+0*cw+8, ry+12)
+                local col2val = esTutor and (s._estudiante or "\xe2\x80\x94") or (s._area or "\xe2\x80\x94")
+                local col3val = esTutor and (s._area or "\xe2\x80\x94")       or (s._tutor or "\xe2\x80\x94")
+                love.graphics.print(col2val,                              margin+1*cw+8, ry+12)
+                love.graphics.print(col3val,                              margin+2*cw+8, ry+12)
+                love.graphics.print((s.duracion or "\xe2\x80\x94").." min",  margin+3*cw+8, ry+12)
 
-                -- badge asistencia
                 local ac = asistColor(s.asistencia or "")
                 local al = s.asistencia or "\xe2\x80\x94"
                 local atw = Fonts.small:getWidth(al)+14
                 love.graphics.setColor(ac[1],ac[2],ac[3],0.15*a)
-                love.graphics.rectangle("fill",margin+4*cw+8,ry+6,atw,22,6)
+                love.graphics.rectangle("fill",margin+4*cw+8,ry+5,atw,22,6)
                 love.graphics.setColor(ac[1],ac[2],ac[3],a)
                 love.graphics.print(al, margin+4*cw+15, ry+12)
 
-                -- badge avance
                 local vc = avColor(s.avance or "")
                 local vl = string.upper(s.avance or "\xe2\x80\x94")
                 local vtw = Fonts.small:getWidth(vl)+14
                 love.graphics.setColor(vc[1],vc[2],vc[3],0.15*a)
-                love.graphics.rectangle("fill",margin+5*cw+8,ry+6,vtw,22,6)
+                love.graphics.rectangle("fill",margin+5*cw+8,ry+5,vtw,22,6)
                 love.graphics.setColor(vc[1],vc[2],vc[3],a)
                 love.graphics.print(vl, margin+5*cw+15, ry+12)
 
-                -- temas (truncado)
                 local temas = s.temas or "\xe2\x80\x94"
-                if #temas > 28 then temas = string.sub(temas,1,26)..".." end
+                if #temas > 26 then temas = string.sub(temas,1,24)..".." end
                 love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],a)
                 love.graphics.print(temas, margin+6*cw+8, ry+12)
             end
         end
     end
 
-    -- Boton volver
     love.graphics.setColor(Colors.accent)
-    love.graphics.rectangle("fill",margin,HH-60,120,42,10)
+    love.graphics.rectangle("fill",margin,HH-58,120,42,10)
     love.graphics.setColor(1,1,1)
     love.graphics.setFont(Fonts.body)
-    love.graphics.printf("Volver",margin,HH-46,120,"center")
+    love.graphics.printf("Volver",margin,HH-44,120,"center")
 end
 
 function SS.draw()
-    local a = fadeIn:value()
-    if Session.rol == "tutor" then
-        drawTutor(a)
+    local a   = fadeIn:value()
+    local rol = Session.rol or params.rol or "estudiante"
+    if params.modo == MODO_FORM then
+        drawForm(a)
     else
-        drawEstudiante(a)
+        drawHistorial(a, rol == "tutor")
     end
 end
 
--- ─── INPUT ───────────────────────────────────────────────────────────────────
+-- === INPUT ===
 function SS.mousepressed(x,y,btn)
-    local rol = Session.rol
+    local rol = Session.rol or params.rol or "estudiante"
     local HH  = H()
 
-    if rol == "estudiante" then
-        if x>=40 and x<=160 and y>=HH-60 and y<=HH-18 then
-            Nav.to("dashboard",{rol=rol,usuario_id=params.usuario_id,nombre=Session.nombre},-1)
+    if params.modo == MODO_FORM then
+        local px    = PX()
+        local btnW3 = math.floor((PW-48-8)/3)
+        local selY  = PY+68
+        if x>=px+90 and x<=px+90+160 and y>=selY-4 and y<=selY+20 then
+            tutoriaSel = (tutoriaSel % math.max(1,#tutorias)) + 1
+            return
         end
-        return
-    end
-
-    -- tutor
-    local px    = PX()
-    local btnW3 = math.floor((PW-48-8)/3)
-    local selY  = PY+68
-    if x>=px+90 and x<=px+90+160 and y>=selY-4 and y<=selY+20 then
-        tutoriaSel = (tutoriaSel % math.max(1,#tutorias)) + 1
-        return
-    end
-    for i,c in ipairs(campos) do
-        local fy = PY+96+(i-1)*110
-        if x>=px+24 and x<=px+PW-24 and y>=fy+24 and y<=fy+68 then campoA=i return end
-    end
-    local sy = PY+96+#campos*110
-    for i=1,3 do
-        local bx = px+24+(i-1)*(btnW3+4)
-        if x>=bx and x<=bx+btnW3 and y>=sy+28 and y<=sy+64 then avSel=i return end
-    end
-    local ay = sy+88
-    for i=1,3 do
-        local bx = px+24+(i-1)*(btnW3+4)
-        if x>=bx and x<=bx+btnW3 and y>=ay+28 and y<=ay+64 then asistSel=i return end
-    end
-    local btnY = ay+82+(guardado and 50 or 0)
-    if x>=px+24 and x<=px+154 and y>=btnY and y<=btnY+46 then
-        Nav.to("dashboard",{rol=rol,usuario_id=params.usuario_id,nombre=Session.nombre},-1)
-        return
-    end
-    if x>=px+PW-154 and x<=px+PW-24 and y>=btnY and y<=btnY+46 then
-        local t = tutorias[tutoriaSel]
-        if t then
-            SesionRepo.crear(t.id, campos[1].value, campos[2].value, campos[3].value, oAsist[asistSel], oAvance[avSel])
-            guardado = true
-            tutorias = TutoriaRepo.getAll()
+        for i,c in ipairs(campos) do
+            local fy = PY+96+(i-1)*110
+            if x>=px+24 and x<=px+PW-24 and y>=fy+24 and y<=fy+68 then campoA=i return end
+        end
+        local sy = PY+96+#campos*110
+        for i=1,3 do
+            local bx = px+24+(i-1)*(btnW3+4)
+            if x>=bx and x<=bx+btnW3 and y>=sy+28 and y<=sy+64 then avSel=i return end
+        end
+        local ay = sy+88
+        for i=1,3 do
+            local bx = px+24+(i-1)*(btnW3+4)
+            if x>=bx and x<=bx+btnW3 and y>=ay+28 and y<=ay+64 then asistSel=i return end
+        end
+        local btnY = ay+82+(guardado and 50 or 0)
+        if x>=px+24 and x<=px+154 and y>=btnY and y<=btnY+46 then
+            Nav.to("sesion",{rol=rol,usuario_id=params.usuario_id,nombre=Session.nombre},-1)
+            return
+        end
+        if x>=px+PW-154 and x<=px+PW-24 and y>=btnY and y<=btnY+46 then
+            local t = tutorias[tutoriaSel]
+            if t then
+                SesionRepo.crear(t.id, campos[1].value, campos[2].value, campos[3].value, oAsist[asistSel], oAvance[avSel])
+                guardado = true
+                tutorias = TutoriaRepo.getAll()
+            end
+        end
+    else
+        if x>=40 and x<=160 and y>=HH-58 and y<=HH-16 then
+            Nav.to("dashboard",{rol=rol,usuario_id=params.usuario_id,nombre=Session.nombre},-1)
         end
     end
 end
 
 function SS.wheelmoved(x,y)
-    if Session.rol == "estudiante" then
+    if params.modo ~= MODO_FORM then
         scrollY = scrollY + y*30
         if scrollY > 0 then scrollY = 0 end
     end
 end
 
 function SS.keypressed(key)
-    if Session.rol ~= "tutor" then return end
+    if params.modo ~= MODO_FORM then return end
     if key=="tab" then
         campoA = (campoA % #campos) + 1
     elseif key=="backspace" then
@@ -331,7 +338,7 @@ function SS.keypressed(key)
 end
 
 function SS.textinput(t)
-    if Session.rol ~= "tutor" then return end
+    if params.modo ~= MODO_FORM then return end
     local c = campos[campoA]
     if c then c.value = c.value..t end
 end
