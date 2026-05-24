@@ -2,6 +2,7 @@ local Anim        = require("src.anim.Anim")
 local UI          = require("src.components.UI")
 local TutoriaRepo = require("src.db.TutoriaRepo")
 local Session     = require("src.session.Session")
+local DB          = require("src.db.DB")
 
 local DS = {}
 local SW = 240
@@ -33,10 +34,9 @@ local BTN_SCREEN = {
     tutor       = "sesion",
     coordinador = "asignacion",
 }
--- params extras que pasa el boton inferior segun rol
 local BTN_EXTRA = {
     estudiante  = { modo="nueva" },
-    tutor       = { modo="nueva" },  -- formulario registrar sesion
+    tutor       = { modo="nueva" },
     coordinador = {},
 }
 
@@ -65,8 +65,11 @@ function DS.load(p)
     for i,item in ipairs(NAV_POR_ROL[rol] or NAV_POR_ROL.estudiante) do
         nav[i] = { label=item.label, screen=item.screen, active=(i==1) }
     end
-    if rol=="estudiante" and params.usuario_id then
-        tutorias = TutoriaRepo.getByEstudiante(params.usuario_id)
+    local uid = Session.usuario_id or params.usuario_id
+    if rol=="estudiante" and uid then
+        tutorias = TutoriaRepo.getByEstudiante(uid)
+    elseif rol=="tutor" and uid then
+        tutorias = TutoriaRepo.getByTutor(uid)
     else
         tutorias = TutoriaRepo.getAll()
     end
@@ -112,6 +115,7 @@ function DS.draw()
     love.graphics.setColor(Colors.border)
     love.graphics.rectangle("fill",SW,0,1,HH)
 
+    -- Logo
     love.graphics.setColor(Colors.accent)
     love.graphics.circle("fill",32,34,14)
     love.graphics.setColor(1,1,1)
@@ -121,6 +125,7 @@ function DS.draw()
     love.graphics.setFont(Fonts.body)
     love.graphics.print("TutorMate",54,24)
 
+    -- Avatar
     love.graphics.setColor(Colors.accentSoft)
     love.graphics.circle("fill",34,108,24)
     love.graphics.setColor(Colors.accent)
@@ -133,6 +138,7 @@ function DS.draw()
     love.graphics.setFont(Fonts.small)
     love.graphics.print(string.upper(rol),68,116)
 
+    -- Nav
     for i,n in ipairs(nav) do
         local ny=210+(i-1)*52
         if n.active then
@@ -147,6 +153,7 @@ function DS.draw()
         love.graphics.print(n.label,38,ny+12)
     end
 
+    -- Boton inferior
     local btnLabel = BTN_POR_ROL[rol] or "+ Acci\xc3\xb3n"
     local p2=(math.sin(pulse)+1)/2
     love.graphics.setColor(Colors.accent[1],Colors.accent[2],Colors.accent[3],p2*0.15)
@@ -157,42 +164,67 @@ function DS.draw()
     love.graphics.setFont(Fonts.body)
     love.graphics.printf(btnLabel,12,HH-51,SW-24,"center")
 
+    -- Saludo
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.big)
     love.graphics.print("Bienvenido, "..nombre().."!",mx2,22)
     love.graphics.setFont(Fonts.body)
     love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
-    love.graphics.print("Tienes "..#tutorias.." tutor\xc3\xadas activas.",mx2,56)
 
-    local banH=math.max(90,math.floor(HH*0.12))
-    local banW=cw2
-    love.graphics.setColor(Colors.greenSoft[1],Colors.greenSoft[2],Colors.greenSoft[3],ba)
-    love.graphics.rectangle("fill",mx2,76,banW,banH,14)
-    local dp=(math.sin(pulse*1.5)+1)/2
-    love.graphics.setColor(Colors.green[1],Colors.green[2],Colors.green[3],0.4+dp*0.5)
-    love.graphics.circle("fill",mx2+18,76+banH/2,6)
-    love.graphics.setColor(Colors.green)
-    love.graphics.rectangle("fill",mx2+34,76+10,118,22,8)
-    love.graphics.setColor(1,1,1)
-    love.graphics.setFont(Fonts.small)
-    love.graphics.printf("Pr\xc3\xb3x. Sesi\xc3\xb3n",mx2+34,76+14,118,"center")
+    -- Subtitulo contextual por rol
+    local subtitulo
+    if rol == "coordinador" then
+        local nPend = #DB.where("solicitudes", function(s) return s.estado=="pendiente" end)
+        subtitulo = nPend.." solicitud(es) pendiente(s) de asignar  \xc2\xb7  "..#tutorias.." tutor\xc3\xadas activas"
+    elseif rol == "tutor" then
+        subtitulo = "Tienes "..#tutorias.." tutor\xc3\xada(s) asignada(s)."
+    else
+        subtitulo = "Tienes "..#tutorias.." tutor\xc3\xada(s) activa(s)."
+    end
+    love.graphics.print(subtitulo, mx2, 56)
+
+    -- Banner Prox Sesion: solo para estudiante y tutor
+    local banH = math.max(90, math.floor(HH*0.12))
+    local banW = cw2
+    local cardsY0
+
+    if rol ~= "coordinador" then
+        love.graphics.setColor(Colors.greenSoft[1],Colors.greenSoft[2],Colors.greenSoft[3],ba)
+        love.graphics.rectangle("fill",mx2,76,banW,banH,14)
+        local dp=(math.sin(pulse*1.5)+1)/2
+        love.graphics.setColor(Colors.green[1],Colors.green[2],Colors.green[3],0.4+dp*0.5)
+        love.graphics.circle("fill",mx2+18,76+banH/2,6)
+        love.graphics.setColor(Colors.green)
+        love.graphics.rectangle("fill",mx2+34,76+10,118,22,8)
+        love.graphics.setColor(1,1,1)
+        love.graphics.setFont(Fonts.small)
+        love.graphics.printf("Pr\xc3\xb3x. Sesi\xc3\xb3n",mx2+34,76+14,118,"center")
+        love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
+        love.graphics.setFont(Fonts.body)
+        local proxArea = tutorias[1] and (tutorias[1].area or "Sin sesiones") or "Sin sesiones"
+        local proxLabel = rol=="tutor"
+            and (proxArea.." - ".. (tutorias[1] and tutorias[1].estudiante_nombre or "Sin tutorias"))
+            or  (proxArea.." - Sesion pendiente")
+        love.graphics.print(proxLabel,mx2+34,76+38)
+        love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
+        love.graphics.setFont(Fonts.small)
+        love.graphics.print("Hoy, 16:00 hs  \xc2\xb7  45 min",mx2+34,76+58)
+        love.graphics.setColor(Colors.card[1],Colors.card[2],Colors.card[3],ba)
+        love.graphics.rectangle("fill",mx2+banW-120,76+banH/2-18,106,36,10)
+        love.graphics.setColor(Colors.green[1],Colors.green[2],Colors.green[3],ba)
+        love.graphics.setFont(Fonts.body)
+        love.graphics.printf("Unirse >",mx2+banW-120,76+banH/2-9,106,"center")
+        cardsY0 = 76+banH+22
+    else
+        -- Coordinador: las cards empiezan mas arriba sin el banner
+        cardsY0 = 80
+    end
+
+    -- Titulo cards
+    local cardsLabel = rol=="coordinador" and "Tutor\xc3\xadas en curso" or "Tus Tutor\xc3\xadas Activas"
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.body)
-    local proxArea = tutorias[1] and (tutorias[1].area or "Sin sesiones") or "Sin sesiones"
-    love.graphics.print(proxArea.." - Sesion pendiente",mx2+34,76+38)
-    love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
-    love.graphics.setFont(Fonts.small)
-    love.graphics.print("Hoy, 16:00 hs  \xc2\xb7  45 min",mx2+34,76+58)
-    love.graphics.setColor(Colors.card[1],Colors.card[2],Colors.card[3],ba)
-    love.graphics.rectangle("fill",mx2+banW-120,76+banH/2-18,106,36,10)
-    love.graphics.setColor(Colors.green[1],Colors.green[2],Colors.green[3],ba)
-    love.graphics.setFont(Fonts.body)
-    love.graphics.printf("Unirse >",mx2+banW-120,76+banH/2-9,106,"center")
-
-    local cardsY0=76+banH+22
-    love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
-    love.graphics.setFont(Fonts.body)
-    love.graphics.print("Tus Tutor\xc3\xadas Activas",mx2,cardsY0-28)
+    love.graphics.print(cardsLabel, mx2, cardsY0-28)
 
     local cw=math.floor((cw2-CARD_GAP*2)/3)
     local ch=math.max(180,math.floor(HH*0.30))
@@ -228,7 +260,11 @@ function DS.draw()
         love.graphics.print(t.area or "\xc3\x81rea",cx+58,cy+24)
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],alpha)
         love.graphics.setFont(Fonts.small)
-        love.graphics.print("Tutor: "..(t.tutor_nombre or "\xe2\x80\x94"),cx+58,cy+42)
+        -- Para coordinador mostrar el estudiante, para los demas el tutor
+        local subInfo = rol=="coordinador"
+            and "Est: "..(t.estudiante_nombre or "\xe2\x80\x94")
+            or  "Tutor: "..(t.tutor_nombre or "\xe2\x80\x94")
+        love.graphics.print(subInfo, cx+58, cy+42)
 
         love.graphics.setColor(Colors.border[1],Colors.border[2],Colors.border[3],alpha)
         love.graphics.rectangle("fill",cx+14,cy+70,cw-28,1)
@@ -279,7 +315,6 @@ function DS.mousepressed(x,y,btn)
             return
         end
     end
-    -- Boton inferior: merge params base + extras por rol
     if x>=12 and x<=SW-12 and y>=HH-62 and y<=HH-14 then
         local dest  = BTN_SCREEN[rol] or "solicitud"
         local extra = BTN_EXTRA[rol]  or {}
