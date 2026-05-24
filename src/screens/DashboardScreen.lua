@@ -6,7 +6,6 @@ local Session     = require("src.session.Session")
 local DS = {}
 local SW = 240
 
--- Nav por rol
 local NAV_POR_ROL = {
     estudiante  = {
         { label="Dashboard",   screen="dashboard" },
@@ -29,10 +28,16 @@ local BTN_POR_ROL = {
     tutor       = "+ Registrar Sesi\xc3\xb3n",
     coordinador = "+ Asignar Tutor",
 }
+-- params extras que pasa el boton inferior segun rol
 local BTN_SCREEN = {
     estudiante  = "solicitud",
     tutor       = "sesion",
     coordinador = "asignacion",
+}
+local BTN_EXTRA = {
+    estudiante  = { modo="nueva" },
+    tutor       = {},
+    coordinador = {},
 }
 
 local nav = {}
@@ -55,13 +60,11 @@ end
 function DS.load(p)
     params = p or {rol="estudiante"}
     hovNav={} hovCards={} pulse=0
-    -- Construir nav segun rol
     local rol = params.rol or "estudiante"
     nav = {}
     for i,item in ipairs(NAV_POR_ROL[rol] or NAV_POR_ROL.estudiante) do
         nav[i] = { label=item.label, screen=item.screen, active=(i==1) }
     end
-    -- Cargar tutorias
     if rol=="estudiante" and params.usuario_id then
         tutorias = TutoriaRepo.getByEstudiante(params.usuario_id)
     else
@@ -109,7 +112,6 @@ function DS.draw()
     love.graphics.setColor(Colors.border)
     love.graphics.rectangle("fill",SW,0,1,HH)
 
-    -- Logo
     love.graphics.setColor(Colors.accent)
     love.graphics.circle("fill",32,34,14)
     love.graphics.setColor(1,1,1)
@@ -119,7 +121,6 @@ function DS.draw()
     love.graphics.setFont(Fonts.body)
     love.graphics.print("TutorMate",54,24)
 
-    -- Avatar
     love.graphics.setColor(Colors.accentSoft)
     love.graphics.circle("fill",34,108,24)
     love.graphics.setColor(Colors.accent)
@@ -132,7 +133,6 @@ function DS.draw()
     love.graphics.setFont(Fonts.small)
     love.graphics.print(string.upper(rol),68,116)
 
-    -- Nav filtrado
     for i,n in ipairs(nav) do
         local ny=210+(i-1)*52
         if n.active then
@@ -147,7 +147,6 @@ function DS.draw()
         love.graphics.print(n.label,38,ny+12)
     end
 
-    -- Boton inferior segun rol
     local btnLabel = BTN_POR_ROL[rol] or "+ Acci\xc3\xb3n"
     local p2=(math.sin(pulse)+1)/2
     love.graphics.setColor(Colors.accent[1],Colors.accent[2],Colors.accent[3],p2*0.15)
@@ -158,7 +157,6 @@ function DS.draw()
     love.graphics.setFont(Fonts.body)
     love.graphics.printf(btnLabel,12,HH-51,SW-24,"center")
 
-    -- Saludo
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.big)
     love.graphics.print("Bienvenido, "..nombre().."!",mx2,22)
@@ -166,7 +164,6 @@ function DS.draw()
     love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
     love.graphics.print("Tienes "..#tutorias.." tutor\xc3\xadas activas.",mx2,56)
 
-    -- Banner proxima sesion
     local banH=math.max(90,math.floor(HH*0.12))
     local banW=cw2
     love.graphics.setColor(Colors.greenSoft[1],Colors.greenSoft[2],Colors.greenSoft[3],ba)
@@ -282,10 +279,13 @@ function DS.mousepressed(x,y,btn)
             return
         end
     end
-    -- Boton inferior
+    -- Boton inferior: merge params base + extras por rol
     if x>=12 and x<=SW-12 and y>=HH-62 and y<=HH-14 then
-        local dest = BTN_SCREEN[rol] or "solicitud"
-        Nav.to(dest,{rol=rol,usuario_id=params.usuario_id,nombre=params.nombre},1)
+        local dest  = BTN_SCREEN[rol] or "solicitud"
+        local extra = BTN_EXTRA[rol]  or {}
+        local p = {rol=rol, usuario_id=params.usuario_id, nombre=params.nombre}
+        for k,v in pairs(extra) do p[k]=v end
+        Nav.to(dest, p, 1)
     end
 end
 
