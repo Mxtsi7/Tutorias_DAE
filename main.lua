@@ -23,34 +23,38 @@ Colors = {
     border     = {0.878, 0.878, 0.910},
 }
 
-Nav = require("src.anim.Transition")
+Nav        = require("src.anim.Transition")
 Fullscreen = false
+
+-- Timer para verificacion periodica de rechazos tacitos (48h sin respuesta)
+local _tacitoTimer    = 0
+local TACITO_INTERVAL = 60   -- verificar cada 60 segundos de tiempo real
 
 function love.load()
     love.graphics.setBackgroundColor(Colors.bg)
     love.graphics.setDefaultFilter("linear", "linear")
 
     Fonts = {
-        title  = love.graphics.newFont(20),
-        body   = love.graphics.newFont(14),
-        small  = love.graphics.newFont(11),
-        big    = love.graphics.newFont(30),
-        huge   = love.graphics.newFont(44),
+        title = love.graphics.newFont(20),
+        body  = love.graphics.newFont(14),
+        small = love.graphics.newFont(11),
+        big   = love.graphics.newFont(30),
+        huge  = love.graphics.newFont(44),
     }
 
     -- Abrir base de datos (crea archivo + schema + seed)
-DB.open()
+    DB.open()
 
-print("Cargando SolicitudHandler...")
-SolicitudHandler.register(EventBus)
-print("Cargando AsignacionHandler...")
-AsignacionHandler.register(EventBus)
-print("Cargando SesionHandler...")
-SesionHandler.register(EventBus)
-print("Cargando AusenciaHandler...")
-AusenciaHandler.register(EventBus)
-print("Cargando CierreHandler...")
-CierreHandler.register(EventBus)
+    print("Cargando SolicitudHandler...")
+    SolicitudHandler.register(EventBus)
+    print("Cargando AsignacionHandler...")
+    AsignacionHandler.register(EventBus)
+    print("Cargando SesionHandler...")
+    SesionHandler.register(EventBus)
+    print("Cargando AusenciaHandler...")
+    AusenciaHandler.register(EventBus)
+    print("Cargando CierreHandler...")
+    CierreHandler.register(EventBus)
 
     ScreenManager.load("login")
 end
@@ -62,6 +66,15 @@ end
 function love.update(dt)
     Nav.update(dt)
     ScreenManager.update(dt)
+
+    -- Verificar rechazos tacitos cada TACITO_INTERVAL segundos
+    -- AsignacionHandler detectara solicitudes en 'asignacion_propuesta' que
+    -- llevan mas de 48h sin respuesta del tutor y las devolvera a 'pendiente'.
+    _tacitoTimer = _tacitoTimer + dt
+    if _tacitoTimer >= TACITO_INTERVAL then
+        _tacitoTimer = 0
+        EventBus.publish(EventTypes.VERIFICAR_TACITOS, {})
+    end
 end
 
 function love.draw()
@@ -98,10 +111,10 @@ end
 
 function love.mousepressed(x,y,button)
     if Nav.active then return end
-    local W2=love.graphics.getWidth()
-    local bx=W2-44
+    local W2 = love.graphics.getWidth()
+    local bx = W2 - 44
     if x>=bx and x<=bx+34 and y>=6 and y<=40 then
-        Fullscreen=not Fullscreen
+        Fullscreen = not Fullscreen
         love.window.setFullscreen(Fullscreen,"desktop")
         return
     end
