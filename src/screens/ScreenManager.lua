@@ -3,12 +3,13 @@ ScreenManager.current     = nil
 ScreenManager.currentName = ""
 
 local registry = {
-    login       = "src.screens.LoginScreen",
-    dashboard   = "src.screens.DashboardScreen",
-    solicitud   = "src.screens.SolicitudScreen",
-    asignacion  = "src.screens.AsignacionScreen",
-    sesion      = "src.screens.SesionScreen",
-    seguimiento = "src.screens.SeguimientoScreen",
+    login           = "src.screens.LoginScreen",
+    dashboard       = "src.screens.DashboardScreen",
+    solicitud       = "src.screens.SolicitudScreen",
+    asignacion      = "src.screens.AsignacionScreen",
+    sesion          = "src.screens.SesionScreen",
+    seguimiento     = "src.screens.SeguimientoScreen",
+    aceptacion_tutor = "src.screens.AceptacionTutorScreen",  -- Decision 3: aceptar/rechazar propuesta
 }
 
 function ScreenManager.load(name, params)
