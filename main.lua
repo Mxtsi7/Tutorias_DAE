@@ -67,9 +67,10 @@ function love.update(dt)
     Nav.update(dt)
     ScreenManager.update(dt)
 
-    -- Verificar rechazos tacitos cada TACITO_INTERVAL segundos
-    -- AsignacionHandler detectara solicitudes en 'asignacion_propuesta' que
-    -- llevan mas de 48h sin respuesta del tutor y las devolvera a 'pendiente'.
+    -- Verificar rechazos tacitos cada TACITO_INTERVAL segundos.
+    -- AsignacionHandler detecta solicitudes en 'asignacion_propuesta'
+    -- que llevan mas de 48h sin respuesta y las devuelve a 'pendiente'
+    -- publicando TUTOR_RECHAZO con tacito=true.
     _tacitoTimer = _tacitoTimer + dt
     if _tacitoTimer >= TACITO_INTERVAL then
         _tacitoTimer = 0
