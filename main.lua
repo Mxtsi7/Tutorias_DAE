@@ -42,9 +42,10 @@ function love.load()
         huge  = love.graphics.newFont(44),
     }
 
-    -- Abrir base de datos (crea archivo + schema + seed)
+    -- Cargar base de datos (crea archivo + schema + seed)
     DB.open()
 
+    -- Registrar handlers de dominio
     print("Cargando SolicitudHandler...")
     SolicitudHandler.register(EventBus)
     print("Cargando AsignacionHandler...")
@@ -56,6 +57,87 @@ function love.load()
     print("Cargando CierreHandler...")
     CierreHandler.register(EventBus)
 
+    -- --------------------------------------------------------
+    -- SISTEMA DE NOTIFICACIONES TOAST (Decision 3, 5 y 6 MPN)
+    -- Se suscribe a los eventos criticos del EventBus y los
+    -- convierte en toasts visibles sobre cualquier pantalla.
+    -- --------------------------------------------------------
+    NotificationManager = require("src.components.NotificationManager")
+
+    -- TUTOR_ACEPTO: tutor acepto la propuesta -> tutoria activa
+    EventBus.subscribe(EventTypes.TUTOR_ACEPTO, function(data)
+        local nombre = (data.tutor and data.tutor.nombre) or "Tutor"
+        local area   = data.area or "la tutor\xc3\xada"
+        NotificationManager.push(
+            "\xe2\x9c\x93 " .. nombre .. " aceptó la tutoría de " .. area,
+            "success"
+        )
+    end)
+
+    -- TUTOR_RECHAZO: rechazo explicito o tacito
+    EventBus.subscribe(EventTypes.TUTOR_RECHAZO, function(data)
+        local tipo = data.tacito
+            and "Rechazo tácito (48h sin respuesta)"
+            or  "Rechazo explícito"
+        NotificationManager.push(
+            "\xe2\x9a\xa0 " .. tipo .. " — solicitud devuelta a pendiente",
+            "warning"
+        )
+    end)
+
+    -- ALERTA_COORDINADOR: ausencias, advertencia formal, abandono potencial
+    EventBus.subscribe(EventTypes.ALERTA_COORDINADOR, function(data)
+        local msg  = data.mensaje or "Alerta del sistema"
+        local tipo = "warning"
+        if data.tipo == "advertencia_formal" then
+            tipo = "error"
+        elseif data.tipo == "abandono_potencial" then
+            tipo = "error"
+        end
+        NotificationManager.push(msg, tipo)
+    end)
+
+    -- NOTIFICACION_MOSTRAR: notificaciones genericas del sistema
+    EventBus.subscribe(EventTypes.NOTIFICACION_MOSTRAR, function(data)
+        local msg  = data.mensaje or data.message or "Notificacion"
+        local tipo = data.tipo    or data.type    or "info"
+        NotificationManager.push(msg, tipo)
+    end)
+
+    -- TUTORIA_CERRADA: confirmacion de cierre exitoso
+    EventBus.subscribe(EventTypes.TUTORIA_CERRADA, function(data)
+        local estudiante = data.estudiante_nombre or "Estudiante"
+        NotificationManager.push(
+            "\xe2\x9c\x93 Tutor\xc3\xada de " .. estudiante .. " cerrada exitosamente",
+            "success"
+        )
+    end)
+
+    -- SOLICITUD_VALIDADA: el sistema valido y registro la solicitud
+    EventBus.subscribe(EventTypes.SOLICITUD_VALIDADA, function(data)
+        local area = data.area or "area no especificada"
+        NotificationManager.push(
+            "\xe2\x84\xb9 Solicitud registrada: " .. area .. " — pendiente de revisi\xc3\xb3n",
+            "info"
+        )
+    end)
+
+    -- SOLICITUD_RECHAZADA: ficha incompleta devuelta al estudiante
+    EventBus.subscribe(EventTypes.SOLICITUD_RECHAZADA, function(data)
+        NotificationManager.push(
+            "\xe2\x9c\x95 Solicitud incompleta: " .. (data.motivo or "complete todos los campos"),
+            "error"
+        )
+    end)
+
+    -- TUTOR_DADO_DE_BAJA: tutor se da de baja, afecta tutorias activas
+    EventBus.subscribe(EventTypes.TUTOR_DADO_DE_BAJA, function(data)
+        NotificationManager.push(
+            "\xe2\x9a\xa0 Tutor dado de baja — tutor\xc3\xadas afectadas pasan a reasignaci\xc3\xb3n",
+            "error"
+        )
+    end)
+
     ScreenManager.load("login")
 end
 
@@ -66,6 +148,7 @@ end
 function love.update(dt)
     Nav.update(dt)
     ScreenManager.update(dt)
+    NotificationManager.update(dt)
 
     -- Verificar rechazos tacitos cada TACITO_INTERVAL segundos.
     -- AsignacionHandler detecta solicitudes en 'asignacion_propuesta'
@@ -82,6 +165,9 @@ function love.draw()
     local W, H = love.graphics.getDimensions()
     ScreenManager.draw()
     Nav.draw(W, H)
+
+    -- Toasts sobre todo lo demas (ultimo en dibujarse = encima de todo)
+    NotificationManager.draw()
 
     -- Boton pantalla completa
     local bx = W - 44
