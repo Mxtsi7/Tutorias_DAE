@@ -14,13 +14,14 @@ local NAV_POR_ROL = {
         { label="Solicitudes", screen="solicitud" },
     },
     tutor = {
-        { label="Dashboard",   screen="dashboard" },
-        { label="Mis Sesiones",screen="sesion" },
+        { label="Dashboard",         screen="dashboard" },
+        { label="Mis Sesiones",       screen="sesion" },
+        { label="Propuestas",         screen="aceptacion_tutor", badge=true },
     },
     coordinador = {
-        { label="Dashboard",   screen="dashboard" },
-        { label="Solicitudes", screen="solicitud" },
-        { label="Seguimiento", screen="seguimiento" },
+        { label="Dashboard",      screen="dashboard" },
+        { label="Solicitudes",    screen="solicitud" },
+        { label="Seguimiento",    screen="seguimiento" },
         { label="Asignaci\xc3\xb3n", screen="asignacion" },
     },
 }
@@ -44,6 +45,7 @@ local nav = {}
 local hovNav={} local hovCards={} local stag={}
 local bannerA=nil local pulse=0 local params={}
 local tutorias={}
+local nPropuestas = 0   -- propuestas pendientes para el tutor activo
 
 local CARD_GAP=16
 local function W() return love.graphics.getWidth() end
@@ -57,21 +59,40 @@ local function avColor(n)
     else return Colors.red end
 end
 
+-- Cuenta las propuestas pendientes para el tutor activo
+local function contarPropuestastutor(uid)
+    if not uid then return 0 end
+    local tutor = DB.find("tutores", function(t) return t.usuario_id == uid end)
+    if not tutor then return 0 end
+    local lista = DB.where("solicitudes", function(s)
+        return s.estado == "asignacion_propuesta"
+               and s.tutor_propuesto == tutor.id
+    end)
+    return #lista
+end
+
 function DS.load(p)
     params = p or {rol="estudiante"}
     hovNav={} hovCards={} pulse=0
     local rol = params.rol or "estudiante"
     nav = {}
     for i,item in ipairs(NAV_POR_ROL[rol] or NAV_POR_ROL.estudiante) do
-        nav[i] = { label=item.label, screen=item.screen, active=(i==1) }
+        nav[i] = {
+            label  = item.label,
+            screen = item.screen,
+            active = (i==1),
+            badge  = item.badge or false,
+        }
     end
     local uid = Session.usuario_id or params.usuario_id
     if rol=="estudiante" and uid then
         tutorias = TutoriaRepo.getByEstudiante(uid)
     elseif rol=="tutor" and uid then
         tutorias = TutoriaRepo.getByTutor(uid)
+        nPropuestas = contarPropuestastutor(uid)
     else
         tutorias = TutoriaRepo.getAll()
+        nPropuestas = 0
     end
     stag    = Anim.staggerList(#tutorias,0.07,0.5)
     bannerA = Anim.new(0,1,0.5,"easeOut")
@@ -138,7 +159,7 @@ function DS.draw()
     love.graphics.setFont(Fonts.small)
     love.graphics.print(string.upper(rol),68,116)
 
-    -- Nav
+    -- Nav items
     for i,n in ipairs(nav) do
         local ny=210+(i-1)*52
         if n.active then
@@ -151,6 +172,21 @@ function DS.draw()
         love.graphics.setColor(n.active and Colors.accent or Colors.text)
         love.graphics.setFont(Fonts.body)
         love.graphics.print(n.label,38,ny+12)
+
+        -- Badge rojo para "Propuestas" cuando hay pendientes
+        if n.badge and nPropuestas > 0 then
+            local pulse2 = (math.sin(pulse * 1.8) + 1) / 2
+            local bx = SW - 30
+            local by = ny + 11
+            love.graphics.setColor(
+                Colors.red[1], Colors.red[2], Colors.red[3],
+                0.75 + pulse2 * 0.25)
+            love.graphics.circle("fill", bx, by, 10)
+            love.graphics.setColor(1,1,1)
+            love.graphics.setFont(Fonts.small)
+            love.graphics.printf(
+                tostring(nPropuestas), bx-10, by-7, 20, "center")
+        end
     end
 
     -- Boton inferior
@@ -164,12 +200,12 @@ function DS.draw()
     love.graphics.setFont(Fonts.body)
     love.graphics.printf(btnLabel,12,HH-51,SW-24,"center")
 
-    -- Saludo (titulo grande en y=22)
+    -- Saludo
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.big)
     love.graphics.print("Bienvenido, "..nombre().."!",mx2,22)
 
-    -- Subtitulo en y=56
+    -- Subtitulo
     love.graphics.setFont(Fonts.body)
     love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
     local subtitulo
@@ -177,13 +213,16 @@ function DS.draw()
         local nPend = #DB.where("solicitudes", function(s) return s.estado=="pendiente" end)
         subtitulo = nPend.." solicitud(es) pendiente(s) de asignar  \xc2\xb7  "..#tutorias.." tutor\xc3\xadas activas"
     elseif rol == "tutor" then
-        subtitulo = "Tienes "..#tutorias.." tutor\xc3\xada(s) asignada(s)."
+        local extra = nPropuestas > 0
+            and ("  \xc2\xb7  " .. nPropuestas .. " propuesta(s) esperando respuesta")
+            or ""
+        subtitulo = "Tienes "..#tutorias.." tutor\xc3\xada(s) asignada(s)."..extra
     else
         subtitulo = "Tienes "..#tutorias.." tutor\xc3\xada(s) activa(s)."
     end
     love.graphics.print(subtitulo, mx2, 56)
 
-    -- Banner Prox Sesion: solo para estudiante y tutor
+    -- Banner Prox Sesion (estudiante y tutor)
     local banH    = math.max(90, math.floor(HH*0.12))
     local banW    = cw2
     local cardsY0
@@ -216,11 +255,10 @@ function DS.draw()
         love.graphics.printf("Unirse >",mx2+banW-120,76+banH/2-9,106,"center")
         cardsY0 = 76+banH+22
     else
-        -- Coordinador: titulo en 56+20=76 → cards a partir de 76+28+8 = 112
         cardsY0 = 112
     end
 
-    -- Titulo seccion cards (siempre 28px antes de cardsY0)
+    -- Titulo cards
     local cardsLabel = rol=="coordinador" and "Tutor\xc3\xadas en curso" or "Tus Tutor\xc3\xadas Activas"
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.body)
