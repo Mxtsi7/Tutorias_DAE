@@ -1,15 +1,15 @@
+-- SolicitudRepo.lua
+-- crear() ahora acepta descripcion y area_id además de los campos originales.
 local DB = require("src.db.DB")
 local R  = {}
 
--- Valores válidos por campo
-local MODALIDADES_VALIDAS = { remota=true, presencial=true }
-local URGENCIAS_VALIDAS   = { alta=true, media=true, baja=true }
+local URGENCIAS_VALIDAS = { alta=true, media=true, baja=true }
 
--- Valida los 4 campos obligatorios. Retorna ok, tabla de errores por campo
-function R.validar(area, urgencia, disponibilidad, modalidad)
+-- Valida campos obligatorios. area_id obligatorio; area (label) es opcional.
+function R.validar(area_id, urgencia, disponibilidad, descripcion)
     local errores = {}
-    if not area or area == "" then
-        errores.area = "El área temática es obligatoria"
+    if not area_id or area_id == "" then
+        errores.area_id = "Debes seleccionar un área"
     end
     if not urgencia or urgencia == "" then
         errores.urgencia = "El nivel de urgencia es obligatorio"
@@ -19,29 +19,29 @@ function R.validar(area, urgencia, disponibilidad, modalidad)
     if not disponibilidad or disponibilidad == "" then
         errores.disponibilidad = "La disponibilidad horaria es obligatoria"
     end
-    if not modalidad or modalidad == "" then
-        errores.modalidad = "La modalidad preferida es obligatoria"
-    elseif not MODALIDADES_VALIDAS[string.lower(modalidad)] then
-        errores.modalidad = "Modalidad debe ser: remota o presencial"
+    if not descripcion or descripcion == "" then
+        errores.descripcion = "Describe brevemente lo que necesitas"
     end
     local ok = next(errores) == nil
     return ok, errores
 end
 
--- Crea la solicitud. Si los datos son inválidos la guarda como "borrador" con errores.
-function R.crear(usuario_id, area, urgencia, disponibilidad, modalidad)
+-- Crea la solicitud con descripcion libre + area_id para matching.
+function R.crear(usuario_id, area_id, area_label, descripcion, urgencia, disponibilidad, modalidad)
     local est = DB.find("estudiantes", function(e) return e.usuario_id == usuario_id end)
     local eid = est and est.id or 0
 
-    local ok, errores = R.validar(area, urgencia, disponibilidad, modalidad)
+    local ok, errores = R.validar(area_id, urgencia, disponibilidad, descripcion)
     local estado = ok and "pendiente" or "borrador"
 
     local id = DB.insert("solicitudes", {
         estudiante_id  = eid,
-        area           = area,
-        urgencia       = urgencia,
-        disponibilidad = disponibilidad,
-        modalidad      = modalidad,
+        area_id        = area_id,
+        area           = area_label or area_id,   -- label legible para vistas
+        descripcion    = descripcion,
+        urgencia       = urgencia       or "",
+        disponibilidad = disponibilidad or "",
+        modalidad      = modalidad      or "",
         estado         = estado,
         fecha          = os.date("%Y-%m-%d"),
         errores_campo  = not ok and errores or nil,
@@ -51,13 +51,15 @@ function R.crear(usuario_id, area, urgencia, disponibilidad, modalidad)
 end
 
 -- Permite corregir y reenviar una solicitud en borrador
-function R.corregir(solicitud_id, area, urgencia, disponibilidad, modalidad)
+function R.corregir(solicitud_id, area_id, area_label, descripcion, urgencia, disponibilidad, modalidad)
     local sol = DB.find("solicitudes", function(s) return s.id == solicitud_id end)
     if not sol then return false, {}, "Solicitud no encontrada" end
     if sol.estado ~= "borrador" then return false, {}, "Solo se pueden corregir solicitudes en borrador" end
 
-    local ok, errores = R.validar(area, urgencia, disponibilidad, modalidad)
-    sol.area           = area
+    local ok, errores = R.validar(area_id, urgencia, disponibilidad, descripcion)
+    sol.area_id        = area_id
+    sol.area           = area_label or area_id
+    sol.descripcion    = descripcion
     sol.urgencia       = urgencia
     sol.disponibilidad = disponibilidad
     sol.modalidad      = modalidad
@@ -67,7 +69,6 @@ function R.corregir(solicitud_id, area, urgencia, disponibilidad, modalidad)
     return ok, errores
 end
 
--- Retiro voluntario de solicitud (estado pendiente o en_espera)
 function R.retirar(solicitud_id)
     local sol = DB.find("solicitudes", function(s) return s.id == solicitud_id end)
     if not sol then return false, "Solicitud no encontrada" end
@@ -81,7 +82,7 @@ end
 
 function R.getAll()
     local all = DB.all("solicitudes")
-    for _,sol in ipairs(all) do
+    for _, sol in ipairs(all) do
         if not sol.estudiante_nombre then
             local est = DB.find("estudiantes", function(e) return e.id == sol.estudiante_id end)
             if est then
