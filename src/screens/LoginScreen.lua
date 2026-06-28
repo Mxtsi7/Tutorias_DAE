@@ -22,13 +22,13 @@ local hover         = {}
 local stag          = {}
 local msgError      = ""
 local pulse         = 0
-local scrollY       = 0          -- scroll lista usuarios
-local selAreas      = {}         -- set: selAreas[id] = true
+local scrollY       = 0
+local selAreas      = {}
 
 local ROLES = {
-    { rol="estudiante",  label="Estudiante",  sub="Ver y solicitar tutor\xc3\xadas",      icono="E", color={0.494,0.165,1}      },
-    { rol="tutor",       label="Tutor",        sub="Registrar sesiones y avance",         icono="T", color={0.133,0.773,0.525} },
-    { rol="coordinador", label="Coordinador",  sub="Gestionar y asignar tutor\xc3\xadas", icono="C", color={1,0.596,0.196}     },
+    { rol="estudiante",  label="Estudiante",  sub="Ver y solicitar tutorias",      icono="E", color={0.494,0.165,1}      },
+    { rol="tutor",       label="Tutor",        sub="Registrar sesiones y avance",   icono="T", color={0.133,0.773,0.525} },
+    { rol="coordinador", label="Coordinador",  sub="Gestionar y asignar tutorias",  icono="C", color={1,0.596,0.196}     },
 }
 
 local ROL_COLOR = {}
@@ -60,14 +60,11 @@ local function getAreasSeleccionadas()
     return lista
 end
 
--- layout constantes para paso 2
-local LIST_TOP   = 148   -- y inicial de la lista de usuarios
-local ROW_U      = 58    -- alto por fila de usuario
-local FORM_EXTRA = 20    -- gap entre lista y formulario
+local LIST_TOP   = 148
+local ROW_U      = 58
+local FORM_EXTRA = 20
 
--- altura total del panel de creacion (sin especialidades)
 local BASE_FORM_H   = 110
--- alto extra del multiselect de especialidades
 local AREA_GRID_H   = math.ceil(#Areas / 3) * 34 + 44
 local FORM_H_TUTOR  = BASE_FORM_H + AREA_GRID_H
 local FORM_H_OTHER  = BASE_FORM_H
@@ -77,7 +74,6 @@ local function formH()
 end
 
 local function formY()
-    -- El formulario se ubica justo debajo de la lista visible
     local listaH  = #usuarios * ROW_U
     local natural = LIST_TOP + listaH + FORM_EXTRA + scrollY
     local minY    = math.floor(H() * 0.55)
@@ -149,9 +145,9 @@ local function drawPaso1()
     love.graphics.printf("TutorMate", 0, math.floor(HH*0.28), WW, "center")
     love.graphics.setFont(Fonts.body)
     love.graphics.setColor(Colors.textSub)
-    love.graphics.printf("Sistema de Gesti\xc3\xb3n de Tutor\xc3\xadas DAE", 0, math.floor(HH*0.28)+58, WW, "center")
+    love.graphics.printf("Sistema de Gestion de Tutorias DAE", 0, math.floor(HH*0.28)+58, WW, "center")
     love.graphics.setFont(Fonts.small)
-    love.graphics.printf("\xc2\xbfQui\xc3\xa9n eres?", 0, math.floor(HH*0.38), WW, "center")
+    love.graphics.printf("Quien eres?", 0, math.floor(HH*0.38), WW, "center")
 
     local cardW = math.floor((WW - MARGIN*2 - 32) / 3)
     local cardH = 130
@@ -227,7 +223,6 @@ local function drawPaso2()
     love.graphics.setFont(Fonts.body)
     love.graphics.print("Usuarios disponibles:", MARGIN, 110)
 
-    -- Scissor para recortar la lista con scroll
     local listAreaTop = LIST_TOP - 4
     local listAreaH   = HH - listAreaTop - 90
     love.graphics.setScissor(MARGIN, listAreaTop, listW, listAreaH)
@@ -263,7 +258,6 @@ local function drawPaso2()
 
             love.graphics.setColor(Colors.textSub[1], Colors.textSub[2], Colors.textSub[3], alpha)
             love.graphics.setFont(Fonts.small)
-            -- Mostrar especialidades si es tutor
             local infoExtra = "ID #" .. tostring(u.id) .. " | " .. (u.rol or rolActivo or "")
             if rolActivo == "tutor" and u.areas_competencia and #u.areas_competencia > 0 then
                 local labs = {}
@@ -290,7 +284,6 @@ local function drawPaso2()
         end
     end
 
-    -- Barra de scroll visual (derecha)
     local totalH = #usuarios * ROW_U
     if totalH > listAreaH then
         local barH     = math.max(30, listAreaH * listAreaH / totalH)
@@ -302,9 +295,9 @@ local function drawPaso2()
         love.graphics.rectangle("fill", WW - 10, barY, 5, barH, 3)
     end
 
-    love.graphics.setScissor()   -- quitar scissor
+    love.graphics.setScissor()
 
-    -- ---- Formulario nuevo usuario ----
+    -- Formulario nuevo usuario
     local fy     = formY()
     local fh     = formH()
 
@@ -317,7 +310,6 @@ local function drawPaso2()
     love.graphics.setFont(Fonts.body)
     love.graphics.print("+ Agregar nuevo " .. (rolActivo or ""), MARGIN+16, fy+14)
 
-    -- Campo nombre
     local fieldX = MARGIN + 16
     local fieldY = fy + 42
     local fieldW = listW - 32 - 180
@@ -343,7 +335,6 @@ local function drawPaso2()
         end
     end
 
-    -- Boton crear
     local btnCX = fieldX + fieldW + 16
     local btnCW = listW - 32 - fieldW - 16
     love.graphics.setColor(
@@ -353,7 +344,7 @@ local function drawPaso2()
     love.graphics.setFont(Fonts.body)
     love.graphics.printf("Crear y usar", btnCX, fieldY+9, btnCW, "center")
 
-    -- ---- Multiselect de especialidades (solo tutor) ----
+    -- Multiselect especialidades (solo tutor)
     if rolActivo == "tutor" then
         local areaTop = fieldY + fieldH + 18
         love.graphics.setColor(Colors.text)
@@ -510,7 +501,6 @@ function LS.mousepressed(x, y, btn)
     else
         local listW = WW - MARGIN*2
 
-        -- Clicks en lista de usuarios
         for i, u in ipairs(usuarios) do
             local ry = LIST_TOP + (i-1)*ROW_U + scrollY
             if x>=MARGIN and x<=MARGIN+listW and y>=ry and y<=ry+ROW_U-8 then
@@ -519,14 +509,12 @@ function LS.mousepressed(x, y, btn)
             end
         end
 
-        -- Clicks en formulario
         local fy     = formY()
         local fieldX = MARGIN + 16
         local fieldY = fy + 42
         local fieldW = listW - 32 - 180
         local fieldH = 36
 
-        -- Foco campo nombre
         if x>=fieldX and x<=fieldX+fieldW and y>=fieldY and y<=fieldY+fieldH then
             inputFocus = true
             return
@@ -534,7 +522,6 @@ function LS.mousepressed(x, y, btn)
             inputFocus = false
         end
 
-        -- Boton crear
         local btnCX = fieldX + fieldW + 16
         local btnCW = listW - 32 - fieldW - 16
         if x>=btnCX and x<=btnCX+btnCW and y>=fieldY and y<=fieldY+fieldH then
@@ -542,7 +529,6 @@ function LS.mousepressed(x, y, btn)
             return
         end
 
-        -- Chips de especialidades (solo tutor)
         if rolActivo == "tutor" then
             local areaTop = fieldY + fieldH + 18
             local cols    = 3
@@ -561,7 +547,6 @@ function LS.mousepressed(x, y, btn)
             end
         end
 
-        -- Boton volver
         local btnY = HH - 78
         if x>=WW-MARGIN-130 and x<=WW-MARGIN and y>=btnY and y<=btnY+44 then
             paso        = 1
