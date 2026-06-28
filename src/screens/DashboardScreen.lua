@@ -3,6 +3,8 @@ local UI          = require("src.components.UI")
 local TutoriaRepo = require("src.db.TutoriaRepo")
 local Session     = require("src.session.Session")
 local DB          = require("src.db.DB")
+local EventBus    = require("src.events.EventBus")
+local EventTypes  = require("src.events.EventTypes")
 
 local DS = {}
 local SW = 240
@@ -14,20 +16,20 @@ local NAV_POR_ROL = {
         { label="Solicitudes", screen="solicitud" },
     },
     tutor = {
-        { label="Dashboard",         screen="dashboard" },
-        { label="Mis Sesiones",       screen="sesion" },
-        { label="Propuestas",         screen="aceptacion_tutor", badge=true },
+        { label="Dashboard",   screen="dashboard" },
+        { label="Mis Sesiones",screen="sesion" },
+        { label="Propuestas",  screen="aceptacion_tutor", badge=true },
     },
     coordinador = {
-        { label="Dashboard",      screen="dashboard" },
-        { label="Solicitudes",    screen="solicitud" },
-        { label="Seguimiento",    screen="seguimiento" },
-        { label="Asignaci\xc3\xb3n", screen="asignacion" },
+        { label="Dashboard",   screen="dashboard" },
+        { label="Solicitudes", screen="solicitud" },
+        { label="Seguimiento", screen="seguimiento" },
+        { label="Asignacion",  screen="asignacion" },
     },
 }
 local BTN_POR_ROL = {
     estudiante  = "+ Nueva Solicitud",
-    tutor       = "+ Registrar Sesi\xc3\xb3n",
+    tutor       = "+ Registrar Sesion",
     coordinador = "+ Asignar Tutor",
 }
 local BTN_SCREEN = {
@@ -45,7 +47,12 @@ local nav = {}
 local hovNav={} local hovCards={} local stag={}
 local bannerA=nil local pulse=0 local params={}
 local tutorias={}
-local nPropuestas = 0   -- propuestas pendientes para el tutor activo
+local nPropuestas = 0
+
+-- Cola de alertas de coordinador pendientes de decision
+-- Cada entrada: { tipo, tutoria_id, estudiante, ausencias, mensaje, animA }
+local alertas = {}
+local hovAlertaBtn = {}   -- hover[alerta_idx]["continuar"|"suspender"]
 
 local CARD_GAP=16
 local function W() return love.graphics.getWidth() end
@@ -59,7 +66,6 @@ local function avColor(n)
     else return Colors.red end
 end
 
--- Cuenta las propuestas pendientes para el tutor activo
 local function contarPropuestastutor(uid)
     if not uid then return 0 end
     local tutor = DB.find("tutores", function(t) return t.usuario_id == uid end)
@@ -71,9 +77,39 @@ local function contarPropuestastutor(uid)
     return #lista
 end
 
+-- Suscripcion a ALERTA_COORDINADOR (solo se registra una vez)
+local _alertaSuscrita = false
+local function suscribirAlertas()
+    if _alertaSuscrita then return end
+    _alertaSuscrita = true
+    EventBus.subscribe(EventTypes.ALERTA_COORDINADOR, function(data)
+        -- Solo acumulamos advertencia_formal y abandono_potencial como tarjetas de decision.
+        -- ausencia_primera es solo informativa (no requiere accion inmediata).
+        if data.tipo == "advertencia_formal" or data.tipo == "abandono_potencial" then
+            -- Evitar duplicados para la misma tutoria
+            for _, a in ipairs(alertas) do
+                if a.tutoria_id == data.tutoria_id then
+                    a.ausencias = data.ausencias or a.ausencias
+                    a.mensaje   = data.mensaje   or a.mensaje
+                    a.tipo      = data.tipo
+                    return
+                end
+            end
+            alertas[#alertas+1] = {
+                tipo       = data.tipo,
+                tutoria_id = data.tutoria_id,
+                estudiante = data.estudiante or "Estudiante",
+                ausencias  = data.ausencias  or 0,
+                mensaje    = data.mensaje    or "",
+                animA      = Anim.new(0, 1, 0.4, "easeOut"),
+            }
+        end
+    end)
+end
+
 function DS.load(p)
     params = p or {rol="estudiante"}
-    hovNav={} hovCards={} pulse=0
+    hovNav={} hovCards={} hovAlertaBtn={} pulse=0
     local rol = params.rol or "estudiante"
     nav = {}
     for i,item in ipairs(NAV_POR_ROL[rol] or NAV_POR_ROL.estudiante) do
@@ -96,12 +132,16 @@ function DS.load(p)
     end
     stag    = Anim.staggerList(#tutorias,0.07,0.5)
     bannerA = Anim.new(0,1,0.5,"easeOut")
+    suscribirAlertas()
 end
 
 function DS.update(dt)
     bannerA:update(dt)
     Anim.staggerUpdate(stag,dt)
     pulse=pulse+dt*2.5
+    for _, a in ipairs(alertas) do
+        if a.animA then a.animA:update(dt) end
+    end
     local mx,my=love.mouse.getPosition()
     for i=1,#nav do
         local ny=210+(i-1)*52
@@ -116,10 +156,95 @@ function DS.update(dt)
         local cy=math.floor(H()*0.38)+row*(ch+CARD_GAP)
         hovCards[i]=mx>=cx and mx<=cx+cw and my>=cy and my<=cy+ch
     end
+    -- Hover botones alertas
+    hovAlertaBtn = {}
+    local rol = params.rol or "estudiante"
+    if rol == "coordinador" then
+        local WW = W()
+        local alertW = CONTENT_W()
+        local alertX = MX()
+        for i, a in ipairs(alertas) do
+            local ay = 76 + (i-1) * 114
+            local btnY = ay + 62
+            hovAlertaBtn[i] = {
+                continuar  = mx>=alertX+12    and mx<=alertX+130   and my>=btnY and my<=btnY+34,
+                suspender  = mx>=alertX+150   and mx<=alertX+290   and my>=btnY and my<=btnY+34,
+            }
+        end
+    end
 end
 
 local function nombre()
     return Session.nombre or params.nombre or "Usuario"
+end
+
+-- Dibuja la zona de alertas para coordinador (devuelve la Y donde termino)
+local function drawAlertas(startY, alertW, alertX, ba)
+    if #alertas == 0 then return startY end
+    local curY = startY
+    for i, a in ipairs(alertas) do
+        local alpha = (a.animA and a.animA:value() or 1) * ba
+        local cardH = 104
+        local isFormal    = a.tipo == "advertencia_formal"
+        local isAbandono  = a.tipo == "abandono_potencial"
+        local borderColor = isAbandono and Colors.red or Colors.orange
+        local bgColor     = isAbandono and {0.99,0.95,0.95} or {0.99,0.97,0.92}
+
+        -- Sombra
+        love.graphics.setColor(0,0,0,0.07*alpha)
+        love.graphics.rectangle("fill", alertX+3, curY+4, alertW, cardH, 12)
+        -- Fondo tarjeta
+        love.graphics.setColor(bgColor[1], bgColor[2], bgColor[3], alpha)
+        love.graphics.rectangle("fill", alertX, curY, alertW, cardH, 12)
+        -- Borde lateral
+        love.graphics.setColor(borderColor[1], borderColor[2], borderColor[3], alpha)
+        love.graphics.rectangle("fill", alertX, curY, 5, cardH, 5)
+
+        -- Icono de alerta
+        love.graphics.setColor(borderColor[1], borderColor[2], borderColor[3], alpha)
+        love.graphics.setFont(Fonts.title)
+        love.graphics.print(isAbandono and "!" or "!", alertX+18, curY+12)
+
+        -- Texto: nombre estudiante y ausencias
+        love.graphics.setColor(Colors.text[1], Colors.text[2], Colors.text[3], alpha)
+        love.graphics.setFont(Fonts.body)
+        local titulo = isAbandono
+            and "Abandono potencial - " .. a.estudiante
+            or  "Advertencia formal - " .. a.estudiante
+        love.graphics.print(titulo, alertX+42, curY+14)
+        love.graphics.setColor(Colors.textSub[1], Colors.textSub[2], Colors.textSub[3], alpha)
+        love.graphics.setFont(Fonts.small)
+        love.graphics.print(
+            a.ausencias .. " ausencia(s) injustificada(s)  |  Tutoria #" .. tostring(a.tutoria_id),
+            alertX+42, curY+36)
+        love.graphics.print("Accion requerida: decide si la tutoria continua o se suspende.",
+            alertX+42, curY+52)
+
+        -- Boton Continuar
+        local btnY = curY + 64
+        local hC   = hovAlertaBtn[i] and hovAlertaBtn[i].continuar
+        love.graphics.setColor(
+            hC and Colors.green[1] or Colors.green[1]*0.85,
+            hC and Colors.green[2] or Colors.green[2]*0.85,
+            hC and Colors.green[3] or Colors.green[3]*0.85, alpha)
+        love.graphics.rectangle("fill", alertX+12, btnY, 120, 32, 8)
+        love.graphics.setColor(1,1,1,alpha)
+        love.graphics.setFont(Fonts.body)
+        love.graphics.printf("Continuar", alertX+12, btnY+8, 120, "center")
+
+        -- Boton Suspender
+        local hS = hovAlertaBtn[i] and hovAlertaBtn[i].suspender
+        love.graphics.setColor(
+            hS and Colors.red[1] or Colors.red[1]*0.85,
+            hS and Colors.red[2] or Colors.red[2]*0.85,
+            hS and Colors.red[3] or Colors.red[3]*0.85, alpha)
+        love.graphics.rectangle("fill", alertX+150, btnY, 140, 32, 8)
+        love.graphics.setColor(1,1,1,alpha)
+        love.graphics.printf("Suspender", alertX+150, btnY+8, 140, "center")
+
+        curY = curY + cardH + 10
+    end
+    return curY + 8
 end
 
 function DS.draw()
@@ -173,7 +298,6 @@ function DS.draw()
         love.graphics.setFont(Fonts.body)
         love.graphics.print(n.label,38,ny+12)
 
-        -- Badge rojo para "Propuestas" cuando hay pendientes
         if n.badge and nPropuestas > 0 then
             local pulse2 = (math.sin(pulse * 1.8) + 1) / 2
             local bx = SW - 30
@@ -184,13 +308,12 @@ function DS.draw()
             love.graphics.circle("fill", bx, by, 10)
             love.graphics.setColor(1,1,1)
             love.graphics.setFont(Fonts.small)
-            love.graphics.printf(
-                tostring(nPropuestas), bx-10, by-7, 20, "center")
+            love.graphics.printf(tostring(nPropuestas), bx-10, by-7, 20, "center")
         end
     end
 
     -- Boton inferior
-    local btnLabel = BTN_POR_ROL[rol] or "+ Acci\xc3\xb3n"
+    local btnLabel = BTN_POR_ROL[rol] or "+ Accion"
     local p2=(math.sin(pulse)+1)/2
     love.graphics.setColor(Colors.accent[1],Colors.accent[2],Colors.accent[3],p2*0.15)
     love.graphics.rectangle("fill",6,HH-70,SW-12,56,14)
@@ -211,23 +334,32 @@ function DS.draw()
     local subtitulo
     if rol == "coordinador" then
         local nPend = #DB.where("solicitudes", function(s) return s.estado=="pendiente" end)
-        subtitulo = nPend.." solicitud(es) pendiente(s) de asignar  \xc2\xb7  "..#tutorias.." tutor\xc3\xadas activas"
+        local nAlertas = #alertas
+        subtitulo = nPend .. " solicitud(es) pendiente(s)  |  " .. #tutorias .. " tutorias activas"
+        if nAlertas > 0 then
+            subtitulo = subtitulo .. "  |  " .. nAlertas .. " alerta(s) requieren decision"
+        end
     elseif rol == "tutor" then
         local extra = nPropuestas > 0
-            and ("  \xc2\xb7  " .. nPropuestas .. " propuesta(s) esperando respuesta")
+            and ("  |  " .. nPropuestas .. " propuesta(s) esperando respuesta")
             or ""
-        subtitulo = "Tienes "..#tutorias.." tutor\xc3\xada(s) asignada(s)."..extra
+        subtitulo = "Tienes "..#tutorias.." tutoria(s) asignada(s)."..extra
     else
-        subtitulo = "Tienes "..#tutorias.." tutor\xc3\xada(s) activa(s)."
+        subtitulo = "Tienes "..#tutorias.." tutoria(s) activa(s)."
     end
     love.graphics.print(subtitulo, mx2, 56)
 
-    -- Banner Prox Sesion (estudiante y tutor)
+    -- Banner / Alertas segun rol
     local banH    = math.max(90, math.floor(HH*0.12))
     local banW    = cw2
     local cardsY0
 
-    if rol ~= "coordinador" then
+    if rol == "coordinador" then
+        -- Para coordinador: mostrar tarjetas de alerta arriba si las hay
+        local afterAlertas = drawAlertas(76, banW, mx2, ba)
+        cardsY0 = afterAlertas + 8
+    else
+        -- Banner proxima sesion para estudiante/tutor
         love.graphics.setColor(Colors.greenSoft[1],Colors.greenSoft[2],Colors.greenSoft[3],ba)
         love.graphics.rectangle("fill",mx2,76,banW,banH,14)
         local dp=(math.sin(pulse*1.5)+1)/2
@@ -237,7 +369,7 @@ function DS.draw()
         love.graphics.rectangle("fill",mx2+34,76+10,118,22,8)
         love.graphics.setColor(1,1,1)
         love.graphics.setFont(Fonts.small)
-        love.graphics.printf("Pr\xc3\xb3x. Sesi\xc3\xb3n",mx2+34,76+14,118,"center")
+        love.graphics.printf("Prox. Sesion",mx2+34,76+14,118,"center")
         love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
         love.graphics.setFont(Fonts.body)
         local proxArea = tutorias[1] and (tutorias[1].area or "Sin sesiones") or "Sin sesiones"
@@ -247,19 +379,17 @@ function DS.draw()
         love.graphics.print(proxLabel,mx2+34,76+38)
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],ba)
         love.graphics.setFont(Fonts.small)
-        love.graphics.print("Hoy, 16:00 hs  \xc2\xb7  45 min",mx2+34,76+58)
+        love.graphics.print("Hoy, 16:00 hs  |  45 min",mx2+34,76+58)
         love.graphics.setColor(Colors.card[1],Colors.card[2],Colors.card[3],ba)
         love.graphics.rectangle("fill",mx2+banW-120,76+banH/2-18,106,36,10)
         love.graphics.setColor(Colors.green[1],Colors.green[2],Colors.green[3],ba)
         love.graphics.setFont(Fonts.body)
         love.graphics.printf("Unirse >",mx2+banW-120,76+banH/2-9,106,"center")
         cardsY0 = 76+banH+22
-    else
-        cardsY0 = 112
     end
 
     -- Titulo cards
-    local cardsLabel = rol=="coordinador" and "Tutor\xc3\xadas en curso" or "Tus Tutor\xc3\xadas Activas"
+    local cardsLabel = rol=="coordinador" and "Tutorias en curso" or "Tus Tutorias Activas"
     love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],ba)
     love.graphics.setFont(Fonts.body)
     love.graphics.print(cardsLabel, mx2, cardsY0-28)
@@ -295,12 +425,12 @@ function DS.draw()
 
         love.graphics.setColor(Colors.text[1],Colors.text[2],Colors.text[3],alpha)
         love.graphics.setFont(Fonts.body)
-        love.graphics.print(t.area or "\xc3\x81rea",cx+58,cy+24)
+        love.graphics.print(t.area or "Area",cx+58,cy+24)
         love.graphics.setColor(Colors.textSub[1],Colors.textSub[2],Colors.textSub[3],alpha)
         love.graphics.setFont(Fonts.small)
         local subInfo = rol=="coordinador"
-            and "Est: "..(t.estudiante_nombre or "\xe2\x80\x94")
-            or  "Tutor: "..(t.tutor_nombre or "\xe2\x80\x94")
+            and "Est: "..(t.estudiante_nombre or "-")
+            or  "Tutor: "..(t.tutor_nombre or "-")
         love.graphics.print(subInfo, cx+58, cy+42)
 
         love.graphics.setColor(Colors.border[1],Colors.border[2],Colors.border[3],alpha)
@@ -341,8 +471,46 @@ function DS.draw()
 end
 
 function DS.mousepressed(x,y,btn)
+    if btn ~= 1 then return end
     local HH=H()
     local rol = params.rol or "estudiante"
+
+    -- Botones de alertas (solo coordinador)
+    if rol == "coordinador" then
+        local alertX = MX()
+        local alertW = CONTENT_W()
+        local removeIdx = nil
+        for i, a in ipairs(alertas) do
+            local ay   = 76 + (i-1) * 114
+            local btnY = ay + 64
+            -- Continuar
+            if x>=alertX+12 and x<=alertX+132 and y>=btnY and y<=btnY+32 then
+                EventBus.publish(EventTypes.TUTORIA_CONTINUA, {
+                    tutoria_id = a.tutoria_id,
+                    ausencias  = a.ausencias,
+                })
+                removeIdx = i
+                break
+            end
+            -- Suspender
+            if x>=alertX+150 and x<=alertX+290 and y>=btnY and y<=btnY+32 then
+                EventBus.publish(EventTypes.TUTORIA_SUSPENDIDA, {
+                    tutoria_id = a.tutoria_id,
+                })
+                removeIdx = i
+                break
+            end
+        end
+        if removeIdx then
+            table.remove(alertas, removeIdx)
+            -- Recargar tutorias para reflejar cambio de estado
+            tutorias = TutoriaRepo.getAll()
+            stag = Anim.staggerList(#tutorias, 0.07, 0.5)
+            return
+        end
+    end
+
+    -- Nav items
     for i,n in ipairs(nav) do
         local ny=210+(i-1)*52
         if x>=0 and x<=SW and y>=ny and y<=ny+44 then
