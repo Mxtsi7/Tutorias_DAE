@@ -8,24 +8,27 @@ function AsignacionHandler.register(EventBus)
     -- TUTOR_ASIGNADO: el coordinador propone un tutor.
     -- La tutoria NO se crea aun; la solicitud pasa a 'asignacion_propuesta'
     -- y se guarda la fecha para detectar rechazo tacito.
+    -- data.modalidad se persiste para usarla cuando el tutor acepte.
     EventBus.subscribe(EventTypes.TUTOR_ASIGNADO, function(data)
         local tutor = data.tutor
         if not tutor then return end
         print("[AsignacionHandler] Propuesta enviada al tutor: " .. (tutor.nombre or "?"))
+        print("[AsignacionHandler] Modalidad propuesta: " .. (data.modalidad or "Presencial"))
 
         if data.solicitud_id then
             local sol = DB.find("solicitudes", function(s) return s.id == data.solicitud_id end)
             if sol then
                 sol.estado          = "asignacion_propuesta"
                 sol.tutor_propuesto = tutor.id
-                sol.fecha_propuesta = os.time()   -- timestamp UNIX para calcular 48h
+                sol.fecha_propuesta = os.time()
+                sol.modalidad       = data.modalidad or "Presencial"  -- persistir modalidad
                 DB.save()
             end
         end
     end)
 
     -- TUTOR_ACEPTO: el tutor acepta la propuesta.
-    -- Solo aqui se crea la tutoria como 'activa' y se descuenta el cupo.
+    -- Solo aqui se crea la tutoria como 'activa' con el campo modalidad.
     EventBus.subscribe(EventTypes.TUTOR_ACEPTO, function(data)
         local tutor = data.tutor
         if not tutor or not data.estudiante_id then return end
@@ -38,12 +41,21 @@ function AsignacionHandler.register(EventBus)
             DB.save()
         end
 
-        -- Crear tutoria activa
+        -- Resolver modalidad: viene en data.modalidad o desde la solicitud guardada
+        local modalidadFinal = data.modalidad
+        if not modalidadFinal and data.solicitud_id then
+            local sol = DB.find("solicitudes", function(s) return s.id == data.solicitud_id end)
+            modalidadFinal = sol and sol.modalidad or "Presencial"
+        end
+        modalidadFinal = modalidadFinal or "Presencial"
+
+        -- Crear tutoria activa con modalidad
         DB.insert("tutorias", {
             estudiante_id      = data.estudiante_id,
             tutor_id           = tutor.id,
             area               = data.area or "",
             estado             = "activa",
+            modalidad          = modalidadFinal,
             nivel_avance       = "bajo",
             sesiones           = 0,
             ausencias          = 0,
@@ -51,6 +63,7 @@ function AsignacionHandler.register(EventBus)
             tutor_nombre       = tutor.nombre,
             estudiante_nombre  = data.estudiante_nombre or "",
             area_necesidad     = data.area or "",
+            horario            = data.horario or "",
             fecha_inicio       = os.date("%Y-%m-%d"),
             advertencia_formal = false,
             alerta_avance_bajo = false,
@@ -69,13 +82,13 @@ function AsignacionHandler.register(EventBus)
             t.ultimo_rechazo = data.tacito and "rechazo_tacito" or "rechazo_explicito"
             DB.save()
         end
-        -- Devolver solicitud a 'pendiente' para que el coordinador reasigne
         if data.solicitud_id then
             local sol = DB.find("solicitudes", function(s) return s.id == data.solicitud_id end)
             if sol and sol.estado == "asignacion_propuesta" then
                 sol.estado          = "pendiente"
                 sol.tutor_propuesto = nil
                 sol.fecha_propuesta = nil
+                sol.modalidad       = nil
                 DB.save()
             end
         end
@@ -84,9 +97,8 @@ function AsignacionHandler.register(EventBus)
     end)
 
     -- VERIFICAR_TACITOS: publicar periodicamente desde main.lua update().
-    -- Detecta solicitudes en 'asignacion_propuesta' que superaron 48h sin respuesta.
     EventBus.subscribe(EventTypes.VERIFICAR_TACITOS, function(_)
-        local LIMITE_SEGUNDOS = 48 * 60 * 60   -- 48 horas
+        local LIMITE_SEGUNDOS = 48 * 60 * 60
         local ahora = os.time()
         local propuestas = DB.where("solicitudes", function(s)
             return s.estado == "asignacion_propuesta"

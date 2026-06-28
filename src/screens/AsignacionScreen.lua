@@ -1,6 +1,6 @@
--- AsignacionScreen.lua  (actualizado: flujo en dos etapas)
--- El coordinador selecciona solicitud + tutor y presiona "Proponer".
--- Esto publica TUTOR_ASIGNADO → AsignacionHandler guarda fecha_propuesta
+-- AsignacionScreen.lua  (actualizado: selector de modalidad + badges de incidentes)
+-- El coordinador selecciona solicitud + tutor + modalidad y presiona "Proponer".
+-- Esto publica TUTOR_ASIGNADO con data.modalidad → AsignacionHandler guarda fecha_propuesta
 -- y pone la solicitud en 'asignacion_propuesta'.
 -- El tutor luego acepta/rechaza en AceptacionTutorScreen.
 -- Si no responde en 48h, main.lua publica VERIFICAR_TACITOS y
@@ -12,15 +12,18 @@ local EventTypes    = require("src.events.EventTypes")
 local DB            = require("src.db.DB")
 
 local AS = {}
-local selTutor     = nil
-local selSolicitud = nil
-local hover        = {}
-local stag         = {}
-local propuesto    = false   -- true cuando se acaba de enviar la propuesta
-local msgError     = ""
-local params       = {}
-local tutores      = {}
-local solicitudes  = {}
+local selTutor      = nil
+local selSolicitud  = nil
+local selModalidad  = 1   -- 1=Presencial, 2=Online, 3=Híbrido
+local hover         = {}
+local stag          = {}
+local propuesto     = false
+local msgError      = ""
+local params        = {}
+local tutores       = {}
+local solicitudes   = {}
+
+local MODALIDADES = { "Presencial", "Online", "H\xc3\xadbrido" }
 
 local function W() return love.graphics.getWidth() end
 local function H() return love.graphics.getHeight() end
@@ -56,7 +59,6 @@ local function esTutorElegible(tutor, solicitud)
 end
 
 local function cargarDatos()
-    -- Solicitudes pendientes o en espera (no las que ya tienen propuesta activa)
     solicitudes = DB.where("solicitudes", function(s)
         return s.estado == "pendiente" or s.estado == "en_espera"
     end)
@@ -90,12 +92,13 @@ local function cargarDatos()
 end
 
 function AS.load(p)
-    params       = p or {}
-    selTutor     = nil
-    selSolicitud = nil
-    propuesto    = false
-    msgError     = ""
-    hover        = {}
+    params        = p or {}
+    selTutor      = nil
+    selSolicitud  = nil
+    selModalidad  = 1
+    propuesto     = false
+    msgError      = ""
+    hover         = {}
     cargarDatos()
     stag = Anim.staggerList(math.max(#solicitudes, #tutores), 0.06, 0.4)
 end
@@ -243,6 +246,25 @@ function AS.draw()
             "Tutorados: " .. activos .. " / " .. limite, col2x + 14, ry + 32)
         love.graphics.print(
             "\xc3\x81reas: " .. (t.areas or "\xe2\x80\x94"), col2x + 14, ry + 50)
+
+        -- Badge de incidentes: amarillo si =1, rojo con "No elegible" si >1
+        local inc = t.incidentes or 0
+        if inc == 1 then
+            local badgeLabel = "\xe2\x9a\xa0 1 incidente"
+            local bw = Fonts.small:getWidth(badgeLabel) + 14
+            love.graphics.setColor(0.98, 0.82, 0.10, 0.22 * alpha)
+            love.graphics.rectangle("fill", col2x + cw - bw - 8, ry + 6, bw, 20, 5)
+            love.graphics.setColor(0.80, 0.60, 0.00, alpha)
+            love.graphics.print(badgeLabel, col2x + cw - bw - 2, ry + 9)
+        elseif inc > 1 then
+            local badgeLabel = "No elegible"
+            local bw = Fonts.small:getWidth(badgeLabel) + 14
+            love.graphics.setColor(Colors.red[1], Colors.red[2], Colors.red[3], 0.20 * alpha)
+            love.graphics.rectangle("fill", col2x + cw - bw - 8, ry + 6, bw, 20, 5)
+            love.graphics.setColor(Colors.red[1], Colors.red[2], Colors.red[3], alpha)
+            love.graphics.print(badgeLabel, col2x + cw - bw - 2, ry + 9)
+        end
+
         if elegible then
             love.graphics.setColor(
                 Colors.green[1], Colors.green[2], Colors.green[3], alpha)
@@ -255,6 +277,26 @@ function AS.draw()
             love.graphics.print(
                 "\xe2\x9c\x95 " .. (motivo or "No elegible"), col2x + 14, ry + 68)
         end
+    end
+
+    -- ---- SELECTOR DE MODALIDAD ----
+    local modY  = HH - 140
+    local modBW = 110
+    local modTotalW = #MODALIDADES * (modBW + 8) - 8
+    local modX0 = math.floor((WW - modTotalW) / 2)
+    love.graphics.setColor(Colors.text)
+    love.graphics.setFont(Fonts.body)
+    love.graphics.printf("Modalidad:", 0, modY, WW, "center")
+    for i, nombre in ipairs(MODALIDADES) do
+        local bx  = modX0 + (i - 1) * (modBW + 8)
+        local by  = modY + 26
+        local sel = selModalidad == i
+        local bc  = sel and Colors.accent or Colors.border
+        love.graphics.setColor(bc)
+        love.graphics.rectangle("fill", bx, by, modBW, 34, 10)
+        love.graphics.setColor(sel and {1, 1, 1} or Colors.text)
+        love.graphics.setFont(Fonts.small)
+        love.graphics.printf(nombre, bx, by + 9, modBW, "center")
     end
 
     -- Mensaje resultado
@@ -283,7 +325,6 @@ function AS.draw()
     love.graphics.setFont(Fonts.body)
     love.graphics.printf("Volver", MARGIN, btnY + 13, 130, "center")
 
-    -- Botón principal ahora dice "Proponer" (no "Asignar")
     local puedeAsignar = selTutor and selSolicitud
     local bc = puedeAsignar and Colors.accent or {0.75, 0.75, 0.85}
     love.graphics.setColor(bc)
@@ -300,6 +341,20 @@ function AS.mousepressed(x, y, btn)
     local col2x  = MARGIN + mitad + 20
     local btnY   = HH - 68
 
+    -- Selector de modalidad
+    local modY  = HH - 140
+    local modBW = 110
+    local modTotalW = #MODALIDADES * (modBW + 8) - 8
+    local modX0 = math.floor((WW - modTotalW) / 2)
+    for i = 1, #MODALIDADES do
+        local bx = modX0 + (i - 1) * (modBW + 8)
+        local by = modY + 26
+        if x >= bx and x <= bx + modBW and y >= by and y <= by + 34 then
+            selModalidad = i
+            return
+        end
+    end
+
     -- Volver
     if x >= MARGIN and x <= MARGIN + 130
         and y >= btnY and y <= btnY + 46 then
@@ -311,7 +366,7 @@ function AS.mousepressed(x, y, btn)
         return
     end
 
-    -- Proponer tutor (flujo correcto: TUTOR_ASIGNADO → esperar aceptación)
+    -- Proponer tutor
     if x >= WW - MARGIN - 160 and x <= WW - MARGIN
         and y >= btnY and y <= btnY + 46 then
         if not selTutor or not selSolicitud then
@@ -327,11 +382,10 @@ function AS.mousepressed(x, y, btn)
             return
         end
 
-        -- Publicar TUTOR_ASIGNADO → AsignacionHandler pone
-        -- solicitud en 'asignacion_propuesta' con fecha_propuesta = os.time()
         EventBus.publish(EventTypes.TUTOR_ASIGNADO, {
             tutor        = tutor,
             solicitud_id = sol.id,
+            modalidad    = MODALIDADES[selModalidad],
         })
 
         propuesto    = true
