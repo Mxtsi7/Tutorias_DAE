@@ -3,6 +3,7 @@
 --   * input de texto libre → solicitud.descripcion
 --   * dropdown de áreas desde areas.lua → solicitud.area_id
 -- Solo area_id se usa para matching en Tutor:esElegible().
+-- FIX: dropdown se dibuja al final (encima de botones).
 
 local Anim          = require("src.anim.Anim")
 local SolicitudRepo = require("src.db.SolicitudRepo")
@@ -11,18 +12,16 @@ local Areas         = require("src.data.areas")
 
 local S = {}
 
--- Campos de texto libre
 local CAMPO_DESC  = 1
 local CAMPO_URG   = 2
 local CAMPO_DISP  = 3
 local campos = {
-    { label="¿Qué necesitas?",         placeholder="Describe tu necesidad de tutoría...", value="", error=false },
+    { label="\xc2\xbfQu\xc3\xa9 necesitas?",         placeholder="Describe tu necesidad de tutor\xc3\xada...", value="", error=false },
     { label="Nivel de Urgencia",        placeholder="alta / media / baja",                value="", error=false },
     { label="Disponibilidad Horaria",   placeholder="Ej: Martes y Jueves tarde",          value="", error=false },
 }
 
--- Estado dropdown de áreas
-local selAreaIdx   = 0          -- 0 = sin seleccionar
+local selAreaIdx   = 0
 local dropdownOpen = false
 
 local campoA  = 1
@@ -42,9 +41,9 @@ local function PX() return math.floor((W() - PW) / 2) end
 local MODO_FORM  = "nueva"
 local MODO_LISTA = "lista"
 
--- Altura total del panel: 3 campos texto + dropdown + mensaje + botones
 local CAMPO_H    = 94
 local DROPDOWN_H = 56
+-- panelH NO incluye la lista desplegable; esta flota encima.
 local function panelH()
     return 68 + #campos * CAMPO_H + DROPDOWN_H + 56 + 60
 end
@@ -74,7 +73,6 @@ function S.update(dt)
     fadeIn:update(dt)
 end
 
--- ── HELPERS ──────────────────────────────────────────────────────────────────
 local function getAreaLabel()
     if selAreaIdx == 0 then return nil end
     return Areas[selAreaIdx] and Areas[selAreaIdx].label or nil
@@ -95,7 +93,7 @@ local function drawForm(a)
     local ph = panelH()
     local ww, hh = W(), H()
 
-    -- Fondo semitransparente
+    -- Fondo modal
     love.graphics.setColor(0.08, 0.08, 0.14, 0.42 * a)
     love.graphics.rectangle("fill", 0, 0, ww, hh)
     love.graphics.setColor(0, 0, 0, 0.10 * a)
@@ -121,7 +119,7 @@ local function drawForm(a)
         local bc = isFocus and Colors.accent or (c.error and Colors.red or Colors.border)
         love.graphics.setColor(bc[1], bc[2], bc[3], a)
         love.graphics.rectangle("fill", px + 22, fy + 24, PW - 44, 44, 12)
-        local ibg = isFocus and {0.97, 0.96, 1} or (c.error and {0.99, 0.96, 0.96} or {1, 1, 1})
+        local ibg = isFocus and {0.97,0.96,1} or (c.error and {0.99,0.96,0.96} or {1,1,1})
         love.graphics.setColor(ibg[1], ibg[2], ibg[3], a)
         love.graphics.rectangle("fill", px + 24, fy + 26, PW - 48, 40, 10)
         love.graphics.setFont(Fonts.body)
@@ -139,11 +137,11 @@ local function drawForm(a)
         end
     end
 
-    -- Dropdown de Área
+    -- ── Dropdown trigger (solo el "botón" cerrado, sin lista aún) ──
     local dy      = dropdownY()
     local dAreaId = getAreaId()
-    local dLabel  = dAreaId and getAreaLabel() or "Selecciona un área..."
-    local dError  = (dAreaId == nil) and enviado   -- marcar error solo al intentar enviar
+    local dLabel  = dAreaId and getAreaLabel() or "Selecciona un \xc3\xa1rea..."
+    local dError  = (dAreaId == nil) and enviado
 
     love.graphics.setColor(Colors.text[1], Colors.text[2], Colors.text[3], a)
     love.graphics.setFont(Fonts.body)
@@ -155,8 +153,6 @@ local function drawForm(a)
     love.graphics.rectangle("fill", px + 22, dy + 22, PW - 44, 44, 12)
     love.graphics.setColor(1, 1, 1, a)
     love.graphics.rectangle("fill", px + 24, dy + 24, PW - 48, 40, 10)
-
-    -- Texto seleccionado o placeholder
     if dAreaId then
         love.graphics.setColor(Colors.text[1], Colors.text[2], Colors.text[3], a)
     else
@@ -164,40 +160,13 @@ local function drawForm(a)
     end
     love.graphics.setFont(Fonts.body)
     love.graphics.print(dLabel, px + 34, dy + 34)
-
-    -- Flecha
     love.graphics.setColor(Colors.textSub[1], Colors.textSub[2], Colors.textSub[3], a)
     love.graphics.setFont(Fonts.small)
     love.graphics.print(dropdownOpen and "\xe2\x96\xb2" or "\xe2\x96\xbc", px + PW - 50, dy + 34)
-
-    -- Error dropdown
     if dError then
         love.graphics.setColor(Colors.red[1], Colors.red[2], Colors.red[3], a)
         love.graphics.setFont(Fonts.small)
         love.graphics.print("Selecciona un \xc3\xa1rea", px + 34, dy + 68)
-    end
-
-    -- Lista desplegable (dibujada sobre el panel)
-    if dropdownOpen then
-        local itemH = 32
-        local listH = #Areas * itemH + 8
-        local lx    = px + 22
-        local ly    = dy + 66
-        love.graphics.setColor(1, 1, 1, a)
-        love.graphics.rectangle("fill", lx, ly, PW - 44, listH, 10)
-        love.graphics.setColor(Colors.border[1], Colors.border[2], Colors.border[3], a)
-        love.graphics.rectangle("line", lx, ly, PW - 44, listH, 10)
-        for j, area in ipairs(Areas) do
-            local iy  = ly + 4 + (j - 1) * itemH
-            local sel = (j == selAreaIdx)
-            if sel then
-                love.graphics.setColor(Colors.accentSoft[1], Colors.accentSoft[2], Colors.accentSoft[3], a)
-                love.graphics.rectangle("fill", lx + 2, iy, PW - 48, itemH - 2, 7)
-            end
-            love.graphics.setColor(sel and Colors.accent or Colors.text)
-            love.graphics.setFont(Fonts.body)
-            love.graphics.print(area.label, lx + 14, iy + 7)
-        end
     end
 
     -- Mensaje resultado
@@ -216,7 +185,7 @@ local function drawForm(a)
         love.graphics.printf(errorMsg, px + 22, my2 + 12, PW - 44, "center")
     end
 
-    -- Botones
+    -- Botones Cancelar / Enviar
     local btnY = my2 + 50
     love.graphics.setColor(Colors.border[1], Colors.border[2], Colors.border[3], a)
     love.graphics.rectangle("fill", px + 22, btnY, 130, 42, 10)
@@ -227,6 +196,36 @@ local function drawForm(a)
     love.graphics.rectangle("fill", px + PW - 152, btnY, 130, 42, 10)
     love.graphics.setColor(1, 1, 1, a)
     love.graphics.printf("Enviar", px + PW - 152, btnY + 12, 130, "center")
+
+    -- ── Lista desplegable pintada AL FINAL → queda encima de todo ──
+    if dropdownOpen then
+        local itemH = 32
+        local lx    = px + 22
+        local ly    = dy + 66
+        local listH = #Areas * itemH + 8
+        -- Sombra
+        love.graphics.setColor(0, 0, 0, 0.12 * a)
+        love.graphics.rectangle("fill", lx + 3, ly + 4, PW - 44, listH, 10)
+        -- Fondo
+        love.graphics.setColor(1, 1, 1, a)
+        love.graphics.rectangle("fill", lx, ly, PW - 44, listH, 10)
+        love.graphics.setColor(Colors.border[1], Colors.border[2], Colors.border[3], a)
+        love.graphics.rectangle("line", lx, ly, PW - 44, listH, 10)
+        for j, area in ipairs(Areas) do
+            local iy  = ly + 4 + (j - 1) * itemH
+            local sel = (j == selAreaIdx)
+            if sel then
+                love.graphics.setColor(Colors.accentSoft[1], Colors.accentSoft[2], Colors.accentSoft[3], a)
+                love.graphics.rectangle("fill", lx + 2, iy, PW - 48, itemH - 2, 7)
+            end
+            love.graphics.setColor(
+                sel and Colors.accent[1] or Colors.text[1],
+                sel and Colors.accent[2] or Colors.text[2],
+                sel and Colors.accent[3] or Colors.text[3], a)
+            love.graphics.setFont(Fonts.body)
+            love.graphics.print(area.label, lx + 14, iy + 7)
+        end
+    end
 end
 
 -- ── VISTA LISTA ──────────────────────────────────────────────────────────────
@@ -239,7 +238,7 @@ end
 local function drawLista(a)
     local WW, HH = W(), H()
     local rol    = Session.rol or params.rol or "estudiante"
-    local titulo = rol == "coordinador" and "Solicitudes — Coordinador" or "Mis Solicitudes"
+    local titulo = rol == "coordinador" and "Solicitudes \xe2\x80\x94 Coordinador" or "Mis Solicitudes"
 
     love.graphics.setColor(Colors.bg)
     love.graphics.rectangle("fill", 0, 0, WW, HH)
@@ -282,25 +281,23 @@ local function drawLista(a)
 
                 local offset = 0
                 if rol == "coordinador" then
-                    love.graphics.print(sol.estudiante_nombre or "\xe2\x80\x94", margin + 0 * cw + 8, ry + 14)
+                    love.graphics.print(sol.estudiante_nombre or "\xe2\x80\x94", margin + 0*cw + 8, ry + 14)
                     offset = 1
                 end
-                -- Mostrar label del área (no el id)
                 local aLabel = sol.area or (sol.area_id and Areas.getLabel(sol.area_id)) or "\xe2\x80\x94"
-                love.graphics.print(aLabel,                          margin + (0 + offset) * cw + 8, ry + 14)
-                -- Descripción truncada
+                love.graphics.print(aLabel,                         margin + (0+offset)*cw + 8, ry + 14)
                 local desc = sol.descripcion or "\xe2\x80\x94"
                 if #desc > 30 then desc = string.sub(desc, 1, 28) .. ".." end
-                love.graphics.print(desc,                            margin + (1 + offset) * cw + 8, ry + 14)
-                love.graphics.print(sol.urgencia or "\xe2\x80\x94",  margin + (2 + offset) * cw + 8, ry + 14)
+                love.graphics.print(desc,                           margin + (1+offset)*cw + 8, ry + 14)
+                love.graphics.print(sol.urgencia or "\xe2\x80\x94", margin + (2+offset)*cw + 8, ry + 14)
 
                 local ec  = estadoColor(sol.estado or "pendiente")
                 local el  = sol.estado or "pendiente"
                 local etw = Fonts.small:getWidth(el) + 14
                 love.graphics.setColor(ec[1], ec[2], ec[3], 0.15 * a)
-                love.graphics.rectangle("fill", margin + (3 + offset) * cw + 8, ry + 7, etw, 22, 6)
+                love.graphics.rectangle("fill", margin + (3+offset)*cw + 8, ry + 7, etw, 22, 6)
                 love.graphics.setColor(ec[1], ec[2], ec[3], a)
-                love.graphics.print(el, margin + (3 + offset) * cw + 15, ry + 14)
+                love.graphics.print(el, margin + (3+offset)*cw + 15, ry + 14)
             end
         end
     end
@@ -331,7 +328,7 @@ function S.mousepressed(x, y, btn)
         local px  = PX()
         local dy  = dropdownY()
 
-        -- Clic en lista desplegable abierta
+        -- Clic en lista desplegable abierta (prioridad máxima)
         if dropdownOpen then
             local itemH = 32
             local lx    = px + 22
@@ -344,13 +341,12 @@ function S.mousepressed(x, y, btn)
                     return
                 end
             end
-            -- Clic fuera cierra el dropdown
             dropdownOpen = false
             return
         end
 
         -- Toggle dropdown
-        if x >= px + 22 and x <= px + PW - 22 and y >= dy + 22 and y <= dy + 66 then
+        if x >= px+22 and x <= px+PW-22 and y >= dy+22 and y <= dy+66 then
             dropdownOpen = not dropdownOpen
             campoA = 0
             return
@@ -359,7 +355,7 @@ function S.mousepressed(x, y, btn)
         -- Foco en campos de texto
         for i, c in ipairs(campos) do
             local fy = PY + 68 + (i - 1) * CAMPO_H
-            if x >= px + 22 and x <= px + PW - 22 and y >= fy + 24 and y <= fy + 68 then
+            if x >= px+22 and x <= px+PW-22 and y >= fy+24 and y <= fy+68 then
                 campoA = i
                 dropdownOpen = false
                 return
@@ -370,24 +366,20 @@ function S.mousepressed(x, y, btn)
         local btnY = my2 + 50
 
         -- Cancelar
-        if x >= px + 22 and x <= px + 152 and y >= btnY and y <= btnY + 42 then
-            Nav.to("solicitud", { rol = rol, usuario_id = params.usuario_id, nombre = Session.nombre }, -1)
+        if x >= px+22 and x <= px+152 and y >= btnY and y <= btnY+42 then
+            Nav.to("solicitud", { rol=rol, usuario_id=params.usuario_id, nombre=Session.nombre }, -1)
             return
         end
 
         -- Enviar
-        if x >= px + PW - 152 and x <= px + PW - 22 and y >= btnY and y <= btnY + 42 then
+        if x >= px+PW-152 and x <= px+PW-22 and y >= btnY and y <= btnY+42 then
             errorMsg = ""
             local valid = true
-
-            -- Validar campos texto
             for _, c in ipairs(campos) do
                 c.error = (c.value == "")
                 if c.error then valid = false end
             end
-            -- Validar área seleccionada
             if selAreaIdx == 0 then valid = false end
-
             if valid then
                 local aId    = getAreaId()
                 local aLabel = getAreaLabel()
@@ -398,7 +390,7 @@ function S.mousepressed(x, y, btn)
                     campos[CAMPO_DESC].value,
                     campos[CAMPO_URG].value,
                     campos[CAMPO_DISP].value,
-                    nil   -- modalidad: se define al asignar tutor
+                    nil
                 )
                 enviado  = true
                 errorMsg = ""
@@ -409,8 +401,8 @@ function S.mousepressed(x, y, btn)
             return
         end
     else
-        if x >= 40 and x <= 160 and y >= HH - 60 and y <= HH - 18 then
-            Nav.to("dashboard", { rol = rol, usuario_id = params.usuario_id, nombre = Session.nombre }, -1)
+        if x >= 40 and x <= 160 and y >= HH-60 and y <= HH-18 then
+            Nav.to("dashboard", { rol=rol, usuario_id=params.usuario_id, nombre=Session.nombre }, -1)
         end
     end
 end

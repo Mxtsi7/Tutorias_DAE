@@ -1,7 +1,7 @@
 -- AsignacionScreen.lua
--- Selector de modalidad en la barra inferior (no en tarjetas).
+-- Sin selector de modalidad (eliminado).
+-- Scroll independiente en columna solicitudes y tutores.
 -- Badges de incidentes en tarjetas de tutores.
--- Scroll independiente para columna solicitudes y columna tutores.
 
 local Anim          = require("src.anim.Anim")
 local EventBus      = require("src.events.EventBus")
@@ -12,7 +12,6 @@ local Areas         = require("src.data.areas")
 local AS = {}
 local selTutor      = nil
 local selSolicitud  = nil
-local selModalidad  = 1
 local hover         = {}
 local stag          = {}
 local propuesto     = false
@@ -20,24 +19,22 @@ local msgError      = ""
 local params        = {}
 local tutores       = {}
 local solicitudes   = {}
-local scrollSol     = 0   -- scroll columna izquierda
-local scrollTut     = 0   -- scroll columna derecha
-
-local MODALIDADES = { "Presencial", "Online", "H\xc3\xadbrido" }
+local scrollSol     = 0
+local scrollTut     = 0
 
 local function W() return love.graphics.getWidth() end
 local function H() return love.graphics.getHeight() end
-local MARGIN  = 50
-local ROW_H   = 90
-local ROW_GAP = 12
-local LIST_TOP = 148   -- y donde comienza la lista
-local FOOTER_H = 140   -- altura reservada para controles inferiores
+local MARGIN   = 50
+local ROW_H    = 90
+local ROW_GAP  = 12
+local LIST_TOP = 148
+local FOOTER_H = 70   -- solo botones, sin modalidad
 
 local function esTutorElegible(tutor, solicitud)
     local activos = tutor.tutorados_activos or 0
     local limite  = tutor.limite or 5
     if activos >= limite then
-        return false, "Sin cupo (" .. activos .. "/" .. limite .. " tutorados)"
+        return false, "Sin cupo ("..activos.."/"..limite.." tutorados)"
     end
     if (tutor.incidentes or 0) > 1 then
         return false, "M\xc3\xa1s de 1 incidente reciente"
@@ -45,14 +42,12 @@ local function esTutorElegible(tutor, solicitud)
     if tutor.estado == "inactivo" then
         return false, "Tutor inactivo (dado de baja)"
     end
-    -- compatibilidad de area_id exacta
     if solicitud and solicitud.area_id then
         local compat = false
         for _, comp in ipairs(tutor.areas_competencia or {}) do
             if comp == solicitud.area_id then compat = true break end
         end
         if not compat then
-            -- es solo advertencia, no bloquea
             return true, "\xe2\x9a\xa0 Sin compatibilidad de \xc3\xa1rea (advertencia)"
         end
     end
@@ -65,11 +60,9 @@ local function cargarDatos()
     end)
     for _, sol in ipairs(solicitudes) do
         if not sol.estudiante_nombre then
-            local est = DB.find("estudiantes",
-                function(e) return e.id == sol.estudiante_id end)
+            local est = DB.find("estudiantes", function(e) return e.id == sol.estudiante_id end)
             if est then
-                local usr = DB.find("usuarios",
-                    function(u) return u.id == est.usuario_id end)
+                local usr = DB.find("usuarios", function(u) return u.id == est.usuario_id end)
                 sol.estudiante_nombre = usr and usr.nombre or "\xe2\x80\x94"
             else
                 sol.estudiante_nombre = "\xe2\x80\x94"
@@ -81,11 +74,9 @@ local function cargarDatos()
     tutores = {}
     for _, t in ipairs(allTutores) do
         if not t.nombre then
-            local usr = DB.find("usuarios",
-                function(u) return u.id == t.usuario_id end)
+            local usr = DB.find("usuarios", function(u) return u.id == t.usuario_id end)
             t.nombre = usr and usr.nombre or "Tutor"
         end
-        -- Construir string legible de areas desde areas_competencia (ids)
         if t.areas_competencia and #t.areas_competencia > 0 then
             local labs = {}
             for _, aid in ipairs(t.areas_competencia) do
@@ -95,7 +86,7 @@ local function cargarDatos()
         else
             t._areasLabel = t.areas or "\xe2\x80\x94"
         end
-        tutores[#tutores + 1] = t
+        tutores[#tutores+1] = t
     end
 end
 
@@ -103,7 +94,6 @@ function AS.load(p)
     params        = p or {}
     selTutor      = nil
     selSolicitud  = nil
-    selModalidad  = 1
     propuesto     = false
     msgError      = ""
     hover         = {}
@@ -116,8 +106,7 @@ end
 function AS.update(dt)
     Anim.staggerUpdate(stag, dt)
     local mx, my = love.mouse.getPosition()
-    local WW     = W()
-    local HH     = H()
+    local WW, HH = W(), H()
     local RW     = WW - MARGIN * 2
     local mitad  = math.floor(RW / 2) - 10
     local col2x  = MARGIN + mitad + 20
@@ -140,11 +129,11 @@ end
 local function drawScrollbar(x, y, w, h, totalItems, scroll, color)
     local totalH = totalItems * (ROW_H + ROW_GAP)
     if totalH <= h then return end
-    local barH   = math.max(24, h * h / totalH)
-    local track  = h - barH
+    local barH  = math.max(24, h * h / totalH)
+    local track = h - barH
     local maxScr = -(totalH - h)
-    local ratio  = maxScr ~= 0 and (-scroll / -maxScr) or 0
-    local barY   = y + ratio * track
+    local ratio = maxScr ~= 0 and (-scroll / -maxScr) or 0
+    local barY  = y + ratio * track
     love.graphics.setColor(color[1], color[2], color[3], 0.30)
     love.graphics.rectangle("fill", x + w - 6, barY, 5, barH, 3)
 end
@@ -178,19 +167,18 @@ function AS.draw()
     love.graphics.setColor(Colors.text)
     love.graphics.setFont(Fonts.body)
     love.graphics.print("Solicitudes pendientes", MARGIN, 106)
-    love.graphics.print("Tutores disponibles", col2x, 106)
+    love.graphics.print("Tutores disponibles",     col2x, 106)
     love.graphics.setColor(Colors.textSub)
     love.graphics.setFont(Fonts.small)
-    love.graphics.print("Selecciona una solicitud", MARGIN, 128)
-    love.graphics.print("Verde = elegible  |  Gris = no elegible", col2x, 128)
+    love.graphics.print("Selecciona una solicitud",                    MARGIN, 128)
+    love.graphics.print("Verde = elegible  |  Gris = no elegible",     col2x, 128)
 
     -- Divisor vertical
     love.graphics.setColor(Colors.border)
     love.graphics.rectangle("fill", MARGIN + mitad + 8, 100, 2, HH - 110)
 
-    -- ======== COLUMNA SOLICITUDES (con scissor) ========
+    -- ======== COLUMNA SOLICITUDES ========
     love.graphics.setScissor(MARGIN, LIST_TOP, mitad, listH)
-
     if #solicitudes == 0 then
         love.graphics.setColor(Colors.textSub)
         love.graphics.setFont(Fonts.small)
@@ -215,10 +203,9 @@ function AS.draw()
         love.graphics.print(sol.estudiante_nombre or "\xe2\x80\x94", MARGIN+14, ry+10)
         love.graphics.setColor(Colors.textSub[1], Colors.textSub[2], Colors.textSub[3], alpha)
         love.graphics.setFont(Fonts.small)
-        -- Mostrar label del area
         local aLabel = sol.area or (sol.area_id and Areas.getLabel(sol.area_id)) or "\xe2\x80\x94"
-        love.graphics.print("\xc3\x81rea: " .. aLabel, MARGIN+14, ry+32)
-        love.graphics.print("Urgencia: " .. (sol.urgencia or "\xe2\x80\x94"), MARGIN+14, ry+50)
+        love.graphics.print("\xc3\x81rea: "..aLabel,                   MARGIN+14, ry+32)
+        love.graphics.print("Urgencia: "..(sol.urgencia or "\xe2\x80\x94"), MARGIN+14, ry+50)
         local estadoBadge = sol.estado == "en_espera" and "En espera" or "Pendiente"
         local ec = sol.estado == "en_espera" and Colors.orange or Colors.green
         love.graphics.setColor(ec[1], ec[2], ec[3], 0.18*alpha)
@@ -229,10 +216,9 @@ function AS.draw()
     drawScrollbar(MARGIN, LIST_TOP, mitad, listH, #solicitudes, scrollSol, Colors.accent)
     love.graphics.setScissor()
 
-    -- ======== COLUMNA TUTORES (con scissor) ========
+    -- ======== COLUMNA TUTORES ========
     local cw = WW - MARGIN - col2x
     love.graphics.setScissor(col2x, LIST_TOP, cw, listH)
-
     local sol_sel = selSolicitud and solicitudes[selSolicitud] or nil
     if #tutores == 0 then
         love.graphics.setColor(Colors.textSub)
@@ -261,21 +247,17 @@ function AS.draw()
             love.graphics.setColor(bc[1], bc[2], bc[3], alpha)
             love.graphics.rectangle("line", col2x+1, ry+1, cw-6, ROW_H-2, 12)
         end
-
         love.graphics.setColor(Colors.text[1], Colors.text[2], Colors.text[3], alpha)
         love.graphics.setFont(Fonts.body)
         love.graphics.print(t.nombre or "Tutor", col2x+14, ry+10)
         love.graphics.setColor(Colors.textSub[1], Colors.textSub[2], Colors.textSub[3], alpha)
         love.graphics.setFont(Fonts.small)
-        local activos = t.tutorados_activos or 0
-        local limite  = t.limite or 5
-        love.graphics.print("Tutorados: "..activos.." / "..limite, col2x+14, ry+32)
+        love.graphics.print("Tutorados: "..(t.tutorados_activos or 0).."/"..(t.limite or 5), col2x+14, ry+32)
         love.graphics.print("\xc3\x81reas: "..(t._areasLabel or "\xe2\x80\x94"), col2x+14, ry+50)
 
-        -- Badge incidentes
         local inc = t.incidentes or 0
         if inc == 1 then
-            local bl = "\xe2\x9a\xa0 1 incidente"
+            local bl  = "\xe2\x9a\xa0 1 incidente"
             local bw2 = Fonts.small:getWidth(bl) + 14
             love.graphics.setColor(0.98, 0.82, 0.10, 0.22*alpha)
             love.graphics.rectangle("fill", col2x+cw-bw2-14, ry+6, bw2, 20, 5)
@@ -292,9 +274,7 @@ function AS.draw()
 
         if elegible then
             love.graphics.setColor(Colors.green[1], Colors.green[2], Colors.green[3], alpha)
-            love.graphics.print(
-                motivo and ("\xe2\x9a\xa0 "..motivo) or "\xe2\x9c\x93 Elegible",
-                col2x+14, ry+68)
+            love.graphics.print(motivo and ("\xe2\x9a\xa0 "..motivo) or "\xe2\x9c\x93 Elegible", col2x+14, ry+68)
         else
             love.graphics.setColor(Colors.red[1], Colors.red[2], Colors.red[3], alpha)
             love.graphics.print("\xe2\x9c\x95 "..(motivo or "No elegible"), col2x+14, ry+68)
@@ -303,46 +283,26 @@ function AS.draw()
     drawScrollbar(col2x, LIST_TOP, cw, listH, #tutores, scrollTut, Colors.green)
     love.graphics.setScissor()
 
-    -- ======== FOOTER ========
+    -- ======== FOOTER (solo botones) ========
     local footerY = HH - FOOTER_H
 
-    -- Selector de modalidad centrado
-    local modBW = 110
-    local modTotalW = #MODALIDADES * (modBW + 8) - 8
-    local modX0 = math.floor((WW - modTotalW) / 2)
-    love.graphics.setColor(Colors.text)
-    love.graphics.setFont(Fonts.body)
-    love.graphics.printf("Modalidad:", 0, footerY + 8, WW, "center")
-    for i, nombre in ipairs(MODALIDADES) do
-        local bx  = modX0 + (i-1)*(modBW+8)
-        local by  = footerY + 34
-        local sel = selModalidad == i
-        love.graphics.setColor(sel and Colors.accent or Colors.border)
-        love.graphics.rectangle("fill", bx, by, modBW, 34, 10)
-        love.graphics.setColor(sel and {1,1,1} or Colors.text)
-        love.graphics.setFont(Fonts.small)
-        love.graphics.printf(nombre, bx, by+9, modBW, "center")
-    end
-
-    -- Mensajes
     if propuesto then
         love.graphics.setColor(Colors.greenSoft)
-        love.graphics.rectangle("fill", MARGIN, footerY+76, RW, 34, 8)
+        love.graphics.rectangle("fill", MARGIN, footerY - 40, RW, 32, 8)
         love.graphics.setColor(Colors.green)
         love.graphics.setFont(Fonts.small)
         love.graphics.printf(
             "\xe2\x9c\x93 Propuesta enviada. El tutor tiene 48h para aceptar o rechazar.",
-            MARGIN, footerY+83, RW, "center")
+            MARGIN, footerY - 33, RW, "center")
     elseif msgError ~= "" then
         love.graphics.setColor(0.99, 0.94, 0.94)
-        love.graphics.rectangle("fill", MARGIN, footerY+76, RW, 30, 8)
+        love.graphics.rectangle("fill", MARGIN, footerY - 36, RW, 28, 8)
         love.graphics.setColor(Colors.red)
         love.graphics.setFont(Fonts.small)
-        love.graphics.printf(msgError, MARGIN, footerY+82, RW, "center")
+        love.graphics.printf(msgError, MARGIN, footerY - 30, RW, "center")
     end
 
-    -- Botones
-    local btnY = HH - 58
+    local btnY = HH - 56
     love.graphics.setColor(Colors.border)
     love.graphics.rectangle("fill", MARGIN, btnY, 130, 44, 12)
     love.graphics.setColor(Colors.text)
@@ -362,7 +322,7 @@ function AS.wheelmoved(x, y)
     local mitad  = math.floor(RW / 2) - 10
     local col2x  = MARGIN + mitad + 20
     local listH  = HH - LIST_TOP - FOOTER_H
-    local mx, my = love.mouse.getPosition()
+    local mx     = love.mouse.getX()
 
     if mx >= MARGIN and mx <= MARGIN + mitad then
         local totalH = #solicitudes * (ROW_H + ROW_GAP)
@@ -385,21 +345,8 @@ function AS.mousepressed(x, y, btn)
     local RW     = WW - MARGIN * 2
     local mitad  = math.floor(RW / 2) - 10
     local col2x  = MARGIN + mitad + 20
-    local btnY   = HH - 58
-    local footerY = HH - FOOTER_H
     local listH  = HH - LIST_TOP - FOOTER_H
-
-    -- Selector de modalidad
-    local modBW = 110
-    local modTotalW = #MODALIDADES * (modBW + 8) - 8
-    local modX0 = math.floor((WW - modTotalW) / 2)
-    for i = 1, #MODALIDADES do
-        local bx = modX0 + (i-1)*(modBW+8)
-        local by = footerY + 34
-        if x>=bx and x<=bx+modBW and y>=by and y<=by+34 then
-            selModalidad = i return
-        end
-    end
+    local btnY   = HH - 56
 
     -- Volver
     if x>=MARGIN and x<=MARGIN+130 and y>=btnY and y<=btnY+44 then
@@ -425,7 +372,7 @@ function AS.mousepressed(x, y, btn)
         EventBus.publish(EventTypes.TUTOR_ASIGNADO, {
             tutor        = tutor,
             solicitud_id = sol.id,
-            modalidad    = MODALIDADES[selModalidad],
+            modalidad    = "Presencial",  -- valor por defecto neutral
         })
         propuesto    = true
         msgError     = ""
@@ -435,7 +382,7 @@ function AS.mousepressed(x, y, btn)
         return
     end
 
-    -- Seleccion solicitud (con scroll)
+    -- Seleccion solicitud
     if x>=MARGIN and x<=MARGIN+mitad-10 and y>=LIST_TOP and y<=LIST_TOP+listH then
         for i in ipairs(solicitudes) do
             local ry = LIST_TOP + (i-1)*(ROW_H+ROW_GAP) + scrollSol
@@ -448,7 +395,7 @@ function AS.mousepressed(x, y, btn)
         end
     end
 
-    -- Seleccion tutor (con scroll)
+    -- Seleccion tutor
     if x>=col2x and x<=WW-MARGIN and y>=LIST_TOP and y<=LIST_TOP+listH then
         for i in ipairs(tutores) do
             local ry = LIST_TOP + (i-1)*(ROW_H+ROW_GAP) + scrollTut
