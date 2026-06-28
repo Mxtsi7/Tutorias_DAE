@@ -1,9 +1,6 @@
 -- SolicitudScreen.lua
--- Formulario con:
---   * input de texto libre → solicitud.descripcion
---   * dropdown de áreas desde areas.lua → solicitud.area_id
--- Solo area_id se usa para matching en Tutor:esElegible().
--- FIX: dropdown se dibuja al final (encima de botones).
+-- Formulario: input texto libre (solicitud.descripcion) + dropdown areas (solicitud.area_id).
+-- Dropdown dibujado AL FINAL de drawForm para quedar encima de los botones.
 
 local Anim          = require("src.anim.Anim")
 local SolicitudRepo = require("src.db.SolicitudRepo")
@@ -16,25 +13,25 @@ local CAMPO_DESC  = 1
 local CAMPO_URG   = 2
 local CAMPO_DISP  = 3
 local campos = {
-    { label="\xc2\xbfQu\xc3\xa9 necesitas?",         placeholder="Describe tu necesidad de tutor\xc3\xada...", value="", error=false },
-    { label="Nivel de Urgencia",        placeholder="alta / media / baja",                value="", error=false },
-    { label="Disponibilidad Horaria",   placeholder="Ej: Martes y Jueves tarde",          value="", error=false },
+    { label="Que necesitas?",         placeholder="Describe tu necesidad de tutoria...", value="", error=false },
+    { label="Nivel de Urgencia",      placeholder="alta / media / baja",                value="", error=false },
+    { label="Disponibilidad Horaria", placeholder="Ej: Martes y Jueves tarde",          value="", error=false },
 }
 
 local selAreaIdx   = 0
 local dropdownOpen = false
 
-local campoA  = 1
-local enviado = false
-local errorMsg = ""
-local fadeIn  = nil
-local params  = {}
+local campoA      = 0
+local enviado     = false
+local errorMsg    = ""
+local fadeIn      = nil
+local params      = {}
 local solicitudes = {}
-local scrollY = 0
+local scrollY     = 0
 
 local PW = 500
 local PY = 32
-local function W() return love.graphics.getWidth() end
+local function W() return love.graphics.getWidth()  end
 local function H() return love.graphics.getHeight() end
 local function PX() return math.floor((W() - PW) / 2) end
 
@@ -43,7 +40,7 @@ local MODO_LISTA = "lista"
 
 local CAMPO_H    = 94
 local DROPDOWN_H = 56
--- panelH NO incluye la lista desplegable; esta flota encima.
+
 local function panelH()
     return 68 + #campos * CAMPO_H + DROPDOWN_H + 56 + 60
 end
@@ -87,7 +84,7 @@ local function dropdownY()
     return PY + 68 + #campos * CAMPO_H
 end
 
--- ── VISTA FORMULARIO ─────────────────────────────────────────────────────────
+-- ── VISTA FORMULARIO ──────────────────────────────────────────────────────────
 local function drawForm(a)
     local px = PX()
     local ph = panelH()
@@ -107,7 +104,7 @@ local function drawForm(a)
     love.graphics.rectangle("fill", px, PY + 40, PW, 20, 0)
     love.graphics.setColor(1, 1, 1, a)
     love.graphics.setFont(Fonts.title)
-    love.graphics.printf("Nueva Solicitud de Tutor\xc3\xada", px, PY + 16, PW, "center")
+    love.graphics.printf("Nueva Solicitud de Tutoria", px, PY + 16, PW, "center")
 
     -- Campos de texto libre
     for i, c in ipairs(campos) do
@@ -137,15 +134,15 @@ local function drawForm(a)
         end
     end
 
-    -- ── Dropdown trigger (solo el "botón" cerrado, sin lista aún) ──
+    -- Dropdown trigger (boton cerrado)
     local dy      = dropdownY()
     local dAreaId = getAreaId()
-    local dLabel  = dAreaId and getAreaLabel() or "Selecciona un \xc3\xa1rea..."
+    local dLabel  = dAreaId and getAreaLabel() or "Selecciona un area..."
     local dError  = (dAreaId == nil) and enviado
 
     love.graphics.setColor(Colors.text[1], Colors.text[2], Colors.text[3], a)
     love.graphics.setFont(Fonts.body)
-    love.graphics.print("\xc3\x81rea de Tutor\xc3\xada", px + 22, dy)
+    love.graphics.print("Area de Tutoria", px + 22, dy)
 
     local dbc = dropdownOpen and Colors.accent
         or (dError and Colors.red or Colors.border)
@@ -162,11 +159,11 @@ local function drawForm(a)
     love.graphics.print(dLabel, px + 34, dy + 34)
     love.graphics.setColor(Colors.textSub[1], Colors.textSub[2], Colors.textSub[3], a)
     love.graphics.setFont(Fonts.small)
-    love.graphics.print(dropdownOpen and "\xe2\x96\xb2" or "\xe2\x96\xbc", px + PW - 50, dy + 34)
+    love.graphics.print(dropdownOpen and "^" or "v", px + PW - 50, dy + 34)
     if dError then
         love.graphics.setColor(Colors.red[1], Colors.red[2], Colors.red[3], a)
         love.graphics.setFont(Fonts.small)
-        love.graphics.print("Selecciona un \xc3\xa1rea", px + 34, dy + 68)
+        love.graphics.print("Selecciona un area", px + 34, dy + 68)
     end
 
     -- Mensaje resultado
@@ -197,16 +194,14 @@ local function drawForm(a)
     love.graphics.setColor(1, 1, 1, a)
     love.graphics.printf("Enviar", px + PW - 152, btnY + 12, 130, "center")
 
-    -- ── Lista desplegable pintada AL FINAL → queda encima de todo ──
+    -- Lista desplegable pintada AL FINAL -> queda encima de todo
     if dropdownOpen then
         local itemH = 32
         local lx    = px + 22
         local ly    = dy + 66
         local listH = #Areas * itemH + 8
-        -- Sombra
         love.graphics.setColor(0, 0, 0, 0.12 * a)
         love.graphics.rectangle("fill", lx + 3, ly + 4, PW - 44, listH, 10)
-        -- Fondo
         love.graphics.setColor(1, 1, 1, a)
         love.graphics.rectangle("fill", lx, ly, PW - 44, listH, 10)
         love.graphics.setColor(Colors.border[1], Colors.border[2], Colors.border[3], a)
@@ -228,7 +223,7 @@ local function drawForm(a)
     end
 end
 
--- ── VISTA LISTA ──────────────────────────────────────────────────────────────
+-- ── VISTA LISTA ───────────────────────────────────────────────────────────────
 local function estadoColor(e)
     if e == "pendiente" then return Colors.orange
     elseif e == "aceptada" or e == "asignada" then return Colors.green
@@ -238,7 +233,7 @@ end
 local function drawLista(a)
     local WW, HH = W(), H()
     local rol    = Session.rol or params.rol or "estudiante"
-    local titulo = rol == "coordinador" and "Solicitudes \xe2\x80\x94 Coordinador" or "Mis Solicitudes"
+    local titulo = rol == "coordinador" and "Solicitudes - Coordinador" or "Mis Solicitudes"
 
     love.graphics.setColor(Colors.bg)
     love.graphics.rectangle("fill", 0, 0, WW, HH)
@@ -253,8 +248,8 @@ local function drawLista(a)
     local ROW_H  = 66
     local startY = 86
     local cols   = rol == "coordinador"
-        and { "Estudiante", "\xc3\x81rea", "Descripci\xc3\xb3n", "Urgencia", "Estado" }
-        or  { "\xc3\x81rea", "Descripci\xc3\xb3n", "Urgencia", "Estado" }
+        and { "Estudiante", "Area", "Descripcion", "Urgencia", "Estado" }
+        or  { "Area", "Descripcion", "Urgencia", "Estado" }
     local cw = math.floor(TW / #cols)
 
     love.graphics.setColor(Colors.textSub)
@@ -268,7 +263,7 @@ local function drawLista(a)
     if #solicitudes == 0 then
         love.graphics.setColor(Colors.textSub[1], Colors.textSub[2], Colors.textSub[3], a)
         love.graphics.setFont(Fonts.body)
-        love.graphics.printf("No hay solicitudes todav\xc3\xada.", 0, HH / 2, WW, "center")
+        love.graphics.printf("No hay solicitudes todavia.", 0, HH / 2, WW, "center")
     else
         for idx, sol in ipairs(solicitudes) do
             local ry = startY + 24 + (idx - 1) * ROW_H + scrollY
@@ -281,15 +276,15 @@ local function drawLista(a)
 
                 local offset = 0
                 if rol == "coordinador" then
-                    love.graphics.print(sol.estudiante_nombre or "\xe2\x80\x94", margin + 0*cw + 8, ry + 14)
+                    love.graphics.print(sol.estudiante_nombre or "-", margin + 0*cw + 8, ry + 14)
                     offset = 1
                 end
-                local aLabel = sol.area or (sol.area_id and Areas.getLabel(sol.area_id)) or "\xe2\x80\x94"
-                love.graphics.print(aLabel,                         margin + (0+offset)*cw + 8, ry + 14)
-                local desc = sol.descripcion or "\xe2\x80\x94"
+                local aLabel = sol.area or (sol.area_id and Areas.getLabel(sol.area_id)) or "-"
+                love.graphics.print(aLabel,                        margin + (0+offset)*cw + 8, ry + 14)
+                local desc = sol.descripcion or "-"
                 if #desc > 30 then desc = string.sub(desc, 1, 28) .. ".." end
-                love.graphics.print(desc,                           margin + (1+offset)*cw + 8, ry + 14)
-                love.graphics.print(sol.urgencia or "\xe2\x80\x94", margin + (2+offset)*cw + 8, ry + 14)
+                love.graphics.print(desc,                          margin + (1+offset)*cw + 8, ry + 14)
+                love.graphics.print(sol.urgencia or "-",           margin + (2+offset)*cw + 8, ry + 14)
 
                 local ec  = estadoColor(sol.estado or "pendiente")
                 local el  = sol.estado or "pendiente"
@@ -318,7 +313,7 @@ function S.draw()
     end
 end
 
--- ── INPUT ────────────────────────────────────────────────────────────────────
+-- ── INPUT ─────────────────────────────────────────────────────────────────────
 function S.mousepressed(x, y, btn)
     if btn ~= 1 then return end
     local rol = Session.rol or params.rol or "estudiante"
@@ -328,7 +323,7 @@ function S.mousepressed(x, y, btn)
         local px  = PX()
         local dy  = dropdownY()
 
-        -- Clic en lista desplegable abierta (prioridad máxima)
+        -- Clic en lista desplegable abierta (prioridad maxima)
         if dropdownOpen then
             local itemH = 32
             local lx    = px + 22
