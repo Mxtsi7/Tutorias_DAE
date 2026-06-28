@@ -3,14 +3,14 @@ ScreenManager.current     = nil
 ScreenManager.currentName = ""
 
 local registry = {
-    login                    = "src.screens.LoginScreen",
-    dashboard                = "src.screens.DashboardScreen",
-    solicitud                = "src.screens.SolicitudScreen",
-    asignacion               = "src.screens.AsignacionScreen",
-    sesion                   = "src.screens.SesionScreen",
-    seguimiento              = "src.screens.SeguimientoScreen",
-    aceptacion_tutor         = "src.screens.AceptacionTutorScreen",
-    confirmacion_estudiante  = "src.screens.ConfirmacionEstudianteScreen",  -- Decision 3b: confirmacion al estudiante tras aceptacion
+    login                   = "src.screens.LoginScreen",
+    dashboard               = "src.screens.DashboardScreen",
+    solicitud               = "src.screens.SolicitudScreen",
+    asignacion              = "src.screens.AsignacionScreen",
+    sesion                  = "src.screens.SesionScreen",
+    seguimiento             = "src.screens.SeguimientoScreen",
+    aceptacion_tutor        = "src.screens.AceptacionTutorScreen",
+    confirmacion_estudiante = "src.screens.ConfirmacionEstudianteScreen",
 }
 
 function ScreenManager.load(name, params)
@@ -43,6 +43,13 @@ end
 function ScreenManager.mousepressed(x, y, button)
     if ScreenManager.current and ScreenManager.current.mousepressed then
         ScreenManager.current.mousepressed(x, y, button)
+    end
+end
+
+-- NUEVO: delegar wheelmoved a la pantalla activa
+function ScreenManager.wheelmoved(x, y)
+    if ScreenManager.current and ScreenManager.current.wheelmoved then
+        ScreenManager.current.wheelmoved(x, y)
     end
 end
 
